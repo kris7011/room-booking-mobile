@@ -1,0 +1,20 @@
+{
+  // Compiles the platform-independent logic in src/ (no .tsx, no React Native
+  // imports) together with tests/ to plain Node.js JavaScript, so the tests can
+  // run with Node's built-in test runner instead of a full Jest + Babel setup.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
+    "types": ["node"],
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  // Must be set here: otherwise the "exclude" inherited from tsconfig.json
+  // (which leaves tests/ out of the app check) would drop every test.
+  "exclude": ["node_modules", ".test-build"]
+}
