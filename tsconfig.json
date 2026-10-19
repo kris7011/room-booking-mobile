@@ -4,7 +4,8 @@
     "strict": true
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  // Tests run on Node and are type-checked by tsconfig.test.json, so app code
-  // never sees Node-only globals that do not exist on a phone.
-  "exclude": ["node_modules", "android", "ios", "tests", ".test-build"]
+  // Tests run on Node and are type-checked by tsconfig.test.json and
+  // e2e/tsconfig.json, so app code never sees Node-only globals that do not
+  // exist on a phone.
+  "exclude": ["node_modules", "android", "ios", "tests", ".test-build", "e2e"]
 }

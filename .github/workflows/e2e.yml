@@ -1,0 +1,107 @@
+name: E2E
+
+# End-to-end tests: the web app in Chromium against the real .NET 10 API on a
+# fresh SQLite database. Separate from ci.yml, so the fast checks report on
+# their own and a slow or failing E2E run is easy to tell apart.
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      backend-ref:
+        description: Branch, tag or commit of kris7011/meeting-room-booking to test against
+        required: false
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright against .NET API and SQLite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Use Playwright's own Chromium (installed and cached below).
+      E2E_BROWSER_CHANNEL: bundled
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      EXPO_NO_TELEMETRY: 1
+
+    steps:
+      # Side by side, like on a developer machine: the tests look for the API
+      # in ../meeting-room-booking by default.
+      - name: Check out the mobile app
+        uses: actions/checkout@v7
+        with:
+          path: room-booking-mobile
+
+      - name: Check out the API (public repository)
+        uses: actions/checkout@v7
+        with:
+          repository: kris7011/meeting-room-booking
+          ref: ${{ inputs.backend-ref || 'main' }}
+          path: meeting-room-booking
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: meeting-room-booking/global.json
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: room-booking-mobile/package-lock.json
+
+      - name: Install app dependencies
+        working-directory: room-booking-mobile
+        run: npm ci
+
+      # Built here so build errors show up in their own step; the test run
+      # then only starts it.
+      - name: Build the API
+        run: dotnet build meeting-room-booking/src/MeetingRoomBooking.Api/MeetingRoomBooking.Api.csproj
+
+      - name: Read Playwright version
+        id: playwright
+        working-directory: room-booking-mobile
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: browser-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Chromium and its system libraries
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        working-directory: room-booking-mobile
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Install Chromium's system libraries (browser restored from cache)
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        working-directory: room-booking-mobile
+        run: npx playwright install-deps chromium
+
+      - name: Run E2E tests
+        working-directory: room-booking-mobile
+        run: npm run test:e2e
+
+      - name: Upload report and failure traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            room-booking-mobile/e2e/.output/report
+            room-booking-mobile/e2e/.output/test-results
+          retention-days: 14
+          if-no-files-found: ignore
