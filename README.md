@@ -12,7 +12,21 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 - Loading, error, "no free rooms" and success states.
 - Booking form with client-side validation that matches the API's rules.
 - Readable messages for API errors such as overlapping bookings (409) and validation errors (400).
-- Works on Android, iOS and web from one code base.
+- One code base for Android, iOS and web. Only web has been tested so far, see [Platform status](#platform-status).
+
+## Platform status
+
+| Platform | Status |
+|---|---|
+| **Web** | **Tested.** Bundling works. Rendered in headless Chrome at 600 px and at a 375 px phone viewport. The whole flow was clicked through in demo mode: search, "no free rooms", results, form validation, booking, refreshed availability. In live mode with the backend switched off, the connection error is shown. |
+| **Android** | **Not tested yet**, on neither an emulator nor a physical device. |
+| **iOS** | **Not tested yet**, on neither a simulator nor a physical device. |
+
+The app only uses React Native core components and `react-native-safe-area-context`, both of which are included in Expo Go. No development build is needed. Native layout, the keyboard and safe areas still need to be checked on a device.
+
+Also not tested: requests to a real running backend. The API client is tested automatically against a mocked `fetch` that copies the backend's contract (see [Tests](#tests)), but has never talked to the actual .NET API.
+
+The web checks were done once by hand and with a one-off headless-Chrome script. CI does not run UI tests.
 
 ## Tech stack
 
@@ -145,3 +159,10 @@ If any step fails, the run fails and the pull request shows a red check.
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+The project was created from Expo's `blank-typescript` template (`create-expo-app`). The template ships with an MIT license held by 650 Industries, Inc. (Expo), and its copyright notice is kept in `LICENSE` because parts of the template are still in the repository:
+
+- `index.ts` and all images in `assets/` (app icon, adaptive icon layers, splash icon, favicon) are unchanged from the template.
+- `app.json`, `tsconfig.json` and `.gitignore` started from the template and have been modified.
+
+Everything else is original to this project. Dependencies installed through npm are covered by their own licenses, which ship inside each package in `node_modules/`.
