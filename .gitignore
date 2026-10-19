@@ -42,3 +42,6 @@ yarn-error.*
 
 # compiled tests (npm test)
 .test-build/
+
+# end-to-end test output: exported web app, report, traces (npm run test:e2e)
+e2e/.output/

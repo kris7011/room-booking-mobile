@@ -100,7 +100,7 @@ Headless Chrome at a 390 × 844 phone viewport, driven over the Chrome DevTools 
 
 ### Not tested
 
-- **Server-side validation messages in the UI.** The booking form validates title and booked-by before sending, and limits their length, so the UI cannot produce a 400 from `POST /api/bookings`. The API's 400 responses were tested over HTTP, and the app's handling of them (`Ugyldige oplysninger: …`) is covered by the unit tests in `tests/api/error-messages.test.ts`.
+- **Server-side validation messages in the UI.** The booking form validates title and booked-by before sending, and limits their length, so the UI cannot produce a 400 from `POST /api/bookings`. The API's 400 responses were tested over HTTP, and the app's handling of them (`Ugyldige oplysninger: …`) is covered by the unit tests in `tests/api/error-messages.test.ts`. The end-to-end suite now also covers the 400 and 404 messages in the browser, by changing the outgoing request (`e2e/specs/api-errors.spec.ts`).
 - **Android and iOS** against the real backend. Only web was tested.
 - **Production configuration.** Not deployed. The automated backend test `Production_SendsNoCorsHeaders` checks that the Production environment sends no CORS headers.
-- The browser and HTTP checks were run once by hand from scripts outside the repository. They are not part of `npm test` or CI.
+- The browser and HTTP checks were run once by hand from scripts outside the repository. They have since been rebuilt as the automated end-to-end suite (`npm run test:e2e`), which also runs in CI. See "End-to-end tests" in the README.

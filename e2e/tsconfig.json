@@ -1,0 +1,13 @@
+{
+  // Type-checks the Playwright tests (run by `npm run typecheck`). They run on
+  // Node, so unlike the app they get Node's types.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["**/*.ts", "**/*.mjs"],
+  // Replaces the inherited "exclude", which leaves e2e/ out of the app check.
+  "exclude": [".output"]
+}

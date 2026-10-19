@@ -24,9 +24,7 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 
 The app only uses React Native core components and `react-native-safe-area-context`, both of which are included in Expo Go. No development build is needed. Native layout, the keyboard and safe areas still need to be checked on a device.
 
-The API client is tested automatically against a mocked `fetch` that copies the backend's contract (see [Tests](#tests)). It has also been tested by hand against the real running .NET API in a browser, see [docs/backend-integration.md](docs/backend-integration.md).
-
-The web checks were done by hand and with one-off headless-Chrome scripts. CI does not run UI tests or tests against a real backend.
+The API client is tested automatically against a mocked `fetch` that copies the backend's contract (see [Tests](#tests)). The web app is also tested end to end against the real .NET API in Chromium, locally and in CI (see [End-to-end tests](#end-to-end-tests)).
 
 ## Tech stack
 
@@ -35,6 +33,7 @@ The web checks were done by hand and with one-off headless-Chrome scripts. CI do
 - react-native-web for the browser build
 - react-native-safe-area-context for notches and status bars
 - Node's built-in test runner (`node:test`) for the automated tests
+- Playwright for the end-to-end tests in a browser
 - GitHub Actions for CI
 
 ## Getting started
@@ -90,14 +89,16 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 |---|---|
 | `npm start` | Start the Expo dev server (Expo Go, emulators, web) |
 | `npm run web` / `android` / `ios` | Start and open a specific platform |
-| `npm run typecheck` | Type-check the app (`tsconfig.json`) and the tests (`tsconfig.test.json`) |
+| `npm run typecheck` | Type-check the app (`tsconfig.json`), the tests (`tsconfig.test.json`) and the E2E tests (`e2e/tsconfig.json`) |
 | `npm test` | Compile and run the automated tests |
+| `npm run test:e2e` | Start the API and the web app, run the end-to-end tests, stop both again |
+| `npm run test:e2e:report` | Open the HTML report of the last E2E run |
 | `npx expo-doctor` | Check dependency versions and project config against Expo SDK 58 |
 | `npx expo install <package>` | Add a dependency in the version that matches the SDK (use instead of `npm install`) |
 
 ### Low-memory machines
 
-`metro.config.js` sets `maxWorkers = 1`, so Metro bundles in a single process instead of one worker per CPU core. This is slower but uses much less memory. Override it per run with `npx expo start --max-workers 4`. `npm test` also runs one test file at a time for the same reason.
+`metro.config.js` sets `maxWorkers = 1`, so Metro bundles in a single process instead of one worker per CPU core. This is slower but uses much less memory. Override it per run with `npx expo start --max-workers 4`. `npm test` also runs one test file at a time for the same reason, and `npm run test:e2e` uses one browser and runs one test at a time.
 
 ## Project structure
 
@@ -123,10 +124,18 @@ tests/
   config/                Environment handling
   utils/                 Dates, time zones and daylight saving time
   support/               Test setup: demo/live mode and a fixed time zone
+e2e/                     End-to-end tests (Playwright), see "End-to-end tests"
+  playwright.config.ts   Starts the API and the web app, one browser, one test at a time
+  global-setup.ts        Refuses to run unless the API uses a new, empty E2E database
+  specs/                 rooms, search, booking, api-errors
+  support/               Ports and paths, page object, API helpers, fixtures, fixed test data
+  scripts/serve-web.mjs  Exports the web app for the E2E API and serves it
 scripts/run-tests.js     Compiles and runs the tests (used by npm test)
 docs/                    How to run against the real backend, and test results
 tsconfig.test.json       Compiles src/**/*.ts and tests/ to .test-build/
-.github/workflows/ci.yml GitHub Actions pipeline
+.github/workflows/
+  ci.yml                 Fast checks: typecheck, tests, Expo Doctor
+  e2e.yml                End-to-end tests against the real API
 ```
 
 ## Tests
@@ -142,9 +151,119 @@ Covered:
 - **Live API client:** exact URLs, query encoding, headers, JSON body, 201/400/404/409/500, non-JSON bodies, network failures and the 10-second timeout. `fetch` is replaced with a mock (`mock.method`) and timers are faked, so no real requests are made.
 - **Error messages and environment handling.**
 
-Not covered yet: React components (this needs `jest-expo` and React Native Testing Library) and automated end-to-end tests against a running backend. A manual end-to-end run is documented in [docs/backend-integration.md](docs/backend-integration.md).
+Not covered yet: React components in isolation (this needs `jest-expo` and React Native Testing Library). The end-to-end tests cover them in the browser.
 
 `scripts/run-tests.js` fails the run if the number of compiled test files does not match `tests/**/*.test.ts`. Without this check, a config mistake could make Node run zero tests and still report success.
+
+## End-to-end tests
+
+`npm run test:e2e` tests the web app the way a user uses it: in a real browser, against the real .NET 10 API, with bookings saved in SQLite. You do not start anything yourself.
+
+### Prerequisites
+
+- The API repository checked out next to this one, as `../meeting-room-booking`. If it is somewhere else, set `E2E_BACKEND_DIR` to its folder.
+- The .NET 10 SDK.
+- Google Chrome. The tests reuse the installed Chrome, so Playwright downloads no browser. Without Chrome, run `npx playwright install chromium` once and set `E2E_BROWSER_CHANNEL=bundled`.
+
+```bash
+npm run test:e2e                         # all tests
+npm run test:e2e -- e2e/specs/booking.spec.ts   # one file
+npm run test:e2e -- -g "409"             # tests whose name matches
+npm run test:e2e -- --headed             # watch it in a visible browser window
+npm run test:e2e:report                  # HTML report of the last run
+```
+
+### What happens during a run
+
+1. Playwright starts the API with `dotnet run` on **http://localhost:5103** and waits for `/health`.
+2. `e2e/scripts/serve-web.mjs` runs `expo export --platform web` with `EXPO_PUBLIC_API_URL=http://localhost:5103` and serves the result on **http://localhost:8181**. Metro uses `metro.config.js`, so `maxWorkers = 1` applies.
+3. The tests run one at a time in one browser window, 390 × 844 pixels.
+4. Playwright stops both servers. This happens even when tests fail.
+
+A run takes about 40 seconds. Most of that is building the API and exporting the web bundle.
+
+### The isolated test database
+
+The tests never use the development database (`meeting-room-booking.db` in the API folder):
+
+- **A new database per run.** Each run gets its own file in the system temp folder (`%TEMP%` on Windows, usually `/tmp` on Linux), named after its start time and a random part, for example `room-booking-e2e-2026-10-19T11-30-00-000Z-1a2b3c4d.db`. The file is passed to the API as `ConnectionStrings__BookingDatabase`. The API creates it, migrates it and seeds the three rooms on start. Next to it are its `-wal` and `-shm` files. It is outside both repositories, so it can never be committed. The run prints its path before the first test.
+- **Separate ports.** The API runs on 5103 and the web app on 8181, so a development API on 5003 or Expo on 8081 can keep running. `reuseExistingServer` is off: if 5103 or 8181 is already in use, the run stops instead of testing against a server it did not start.
+- **Checked before the first test.** `global-setup.ts` stops the run unless the database file exists and contains no bookings.
+- **No `.env.local`.** The export sets `EXPO_NO_DOTENV=1`, so your `.env.local` is never read. `serve-web.mjs` also refuses to serve a bundle that does not contain the E2E API address.
+- **Clean between tests.** Before each test, all bookings are deleted through the API. Tests therefore do not depend on each other or on their order.
+
+The API still runs in the `Development` environment, because that is where it enables CORS. The allowed origin is replaced through `Cors__AllowedOrigins__0=http://localhost:8181`. No change to the API is needed.
+
+### Cleaning up test databases
+
+The tests never delete a database file, neither their own nor another run's. `npx playwright test -c e2e --list` creates and deletes nothing. It also leaves the last HTML report and `e2e/.output/test-results/` in place. A real run replaces both, as Playwright always does.
+
+Automatic cleanup at the end of a run is not safe:
+
+- Playwright stops the API only after every teardown hook has run. While a hook runs, the API still has the file open. On Windows the file cannot be deleted then. On Linux it can be, but under a running process.
+- A run that is stopped with Ctrl+C or killed runs no teardown at all.
+- Another run may still be using its own file.
+
+The files are therefore kept. This also helps when you want to look at the data after a failed run. Each file is small, typically under 1 MB with its `-wal` and `-shm` files. To remove them:
+
+1. Make sure no E2E run is active. Nothing may listen on the E2E ports. The commands below print nothing when that is the case:
+
+   ```powershell
+   # Windows (PowerShell)
+   Get-NetTCPConnection -LocalPort 5103,5104,8181 -State Listen -ErrorAction SilentlyContinue
+   ```
+
+   ```bash
+   # Linux / macOS
+   lsof -nP -iTCP:5103 -iTCP:5104 -iTCP:8181 -sTCP:LISTEN
+   ```
+
+2. Delete only the E2E files. Do not delete other files in the temp folder, and never `meeting-room-booking.db` in the API folder, which is the development database.
+
+   ```powershell
+   Remove-Item "$env:TEMP\room-booking-e2e-*"
+   ```
+
+   ```bash
+   rm -f "${TMPDIR:-/tmp}"/room-booking-e2e-*
+   ```
+
+On Windows, `Remove-Item` refuses to delete a file that a running API still has open, which is an extra safeguard. On GitHub Actions nothing needs to be cleaned up, because each job runs on a new machine.
+
+### Fixed time and test data
+
+The browser's clock is frozen at **Monday 4 March 2030, 07:40**, and its time zone is set to `Europe/Copenhagen`. The day picker, the default search window (08:00–09:00, sent as `07:00Z`–`08:00Z`) and all expected texts are therefore the same on every machine and every day. Timers still run normally. The seeded rooms (Focus 4, Collaboration 8, Board 12) and all times are in `e2e/support/test-data.ts`.
+
+The tests wait for real states: an API response (`waitForResponse`), a visible text, or a health check (`expect.poll`). They never wait a fixed time.
+
+### What is tested
+
+| File | Scenarios |
+|---|---|
+| `rooms.spec.ts` | Rooms come from the API in live mode. With the API unreachable, the connection error appears, and **Prøv igen** recovers. |
+| `search.spec.ts` | Local time is sent as UTC. The smallest fitting room is listed first. Capacity filter. Booked rooms are hidden, but back-to-back bookings are not. "Ingen ledige lokaler". |
+| `booking.spec.ts` | Form validation sends nothing. A booking is created (201 with CORS header), shown, stored and hidden from the results, also after a reload. The booking is still there for a new API process on the same file. A double booking gets 409 and the conflict message. |
+| `api-errors.spec.ts` | 400 for an invalid period, capacity, empty fields and a too-long title. 409 for overlaps, 201 for back-to-back bookings. 404 for an unknown room or booking. The app's messages for 400 and 404 responses. |
+
+Two scenarios cannot be produced by a real user, so the tests steer them:
+
+- **API unreachable.** The test makes the browser fail every request to the API with `ERR_CONNECTION_REFUSED` (`page.route(...).abort('connectionrefused')`). That is the same error the app gets when the API is down. The real API is not stopped, because other tests in the run need it.
+- **400 and 404 shown in the app.** The form validates its input and only offers existing rooms. The test therefore changes the outgoing POST on its way to the API, the way an outdated app version or a just-deleted room would. The API's response is real.
+
+"Persistence across a restart" starts a second API process (port 5104) on the same database file and reads the booking from it. A new process has nothing in memory, so it can only find the booking in SQLite.
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `The meeting-room-booking API was not found at …` | Clone the API next to this repository, or set `E2E_BACKEND_DIR`. |
+| `http://localhost:5103/health is already used` (or 8181) | Something is running on that port, often an earlier run that was killed. Stop it. On Windows: `Get-NetTCPConnection -LocalPort 5103` shows the process ID. |
+| `Chromium distribution 'chrome' is not found` | Install Google Chrome, or run `npx playwright install chromium` and set `E2E_BROWSER_CHANNEL=bundled`. |
+| `Timed out waiting … from config.webServer` | The first build of the API or the web export took too long, often on the first run after `npm ci`. Run again, or run `dotnet build` in the API folder first. |
+| `does not contain http://localhost:5103. Refusing to serve it.` | The exported bundle points to another API. Delete `e2e/.output` and run again. |
+| A test fails | `npm run test:e2e:report` shows the step, a screenshot and a trace (network, DOM, console) for each failed test. The raw files are in `e2e/.output/test-results/`. |
+
+All output (exported web app, report, traces) is written to `e2e/.output/`, which is gitignored.
 
 ## Continuous integration
 
@@ -156,6 +275,16 @@ Not covered yet: React components (this needs `jest-expo` and React Native Testi
 4. `npx expo-doctor`
 
 If any step fails, the run fails and the pull request shows a red check.
+
+`.github/workflows/e2e.yml` runs the end-to-end tests as a separate check, **E2E / Playwright against .NET API and SQLite**, on every pull request and manually from the Actions tab. When started manually, you can choose which branch of the API to test against. It does the following:
+
+1. Checks out this repository and the public `kris7011/meeting-room-booking` side by side.
+2. Installs .NET 10 (from the API's `global.json`) and Node 24.
+3. Builds the API.
+4. Installs Playwright's Chromium with its system libraries. The browser is cached per Playwright version.
+5. Runs `npm run test:e2e`.
+
+The HTML report and the traces of failed tests are uploaded as the `e2e-report` artifact.
 
 ## License
 
