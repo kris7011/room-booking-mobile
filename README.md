@@ -186,13 +186,49 @@ A run takes about 40 seconds. Most of that is building the API and exporting the
 
 The tests never use the development database (`meeting-room-booking.db` in the API folder):
 
-- **A new database per run.** Each run creates `room-booking-e2e/run-<time>-<pid>/meeting-room-booking-e2e.db` in the system temp folder (`%TEMP%` on Windows, `/tmp` on Linux) and passes it to the API as `ConnectionStrings__BookingDatabase`. The API migrates it and seeds the three rooms on start. It is outside both repositories, so it can never be committed. The next run deletes it. It cannot be deleted at the end of a run, because the API still has it open until Playwright stops it.
+- **A new database per run.** Each run gets its own file in the system temp folder (`%TEMP%` on Windows, usually `/tmp` on Linux), named after its start time and a random part, for example `room-booking-e2e-2026-10-19T11-30-00-000Z-1a2b3c4d.db`. The file is passed to the API as `ConnectionStrings__BookingDatabase`. The API creates it, migrates it and seeds the three rooms on start. Next to it are its `-wal` and `-shm` files. It is outside both repositories, so it can never be committed. The run prints its path before the first test.
 - **Separate ports.** The API runs on 5103 and the web app on 8181, so a development API on 5003 or Expo on 8081 can keep running. `reuseExistingServer` is off: if 5103 or 8181 is already in use, the run stops instead of testing against a server it did not start.
 - **Checked before the first test.** `global-setup.ts` stops the run unless the database file exists and contains no bookings.
 - **No `.env.local`.** The export sets `EXPO_NO_DOTENV=1`, so your `.env.local` is never read. `serve-web.mjs` also refuses to serve a bundle that does not contain the E2E API address.
 - **Clean between tests.** Before each test, all bookings are deleted through the API. Tests therefore do not depend on each other or on their order.
 
 The API still runs in the `Development` environment, because that is where it enables CORS. The allowed origin is replaced through `Cors__AllowedOrigins__0=http://localhost:8181`. No change to the API is needed.
+
+### Cleaning up test databases
+
+The tests never delete a database file, neither their own nor another run's. `npx playwright test -c e2e --list` creates and deletes nothing. It also leaves the last HTML report and `e2e/.output/test-results/` in place. A real run replaces both, as Playwright always does.
+
+Automatic cleanup at the end of a run is not safe:
+
+- Playwright stops the API only after every teardown hook has run. While a hook runs, the API still has the file open. On Windows the file cannot be deleted then. On Linux it can be, but under a running process.
+- A run that is stopped with Ctrl+C or killed runs no teardown at all.
+- Another run may still be using its own file.
+
+The files are therefore kept. This also helps when you want to look at the data after a failed run. Each file is small, typically under 1 MB with its `-wal` and `-shm` files. To remove them:
+
+1. Make sure no E2E run is active. Nothing may listen on the E2E ports. The commands below print nothing when that is the case:
+
+   ```powershell
+   # Windows (PowerShell)
+   Get-NetTCPConnection -LocalPort 5103,5104,8181 -State Listen -ErrorAction SilentlyContinue
+   ```
+
+   ```bash
+   # Linux / macOS
+   lsof -nP -iTCP:5103 -iTCP:5104 -iTCP:8181 -sTCP:LISTEN
+   ```
+
+2. Delete only the E2E files. Do not delete other files in the temp folder, and never `meeting-room-booking.db` in the API folder, which is the development database.
+
+   ```powershell
+   Remove-Item "$env:TEMP\room-booking-e2e-*"
+   ```
+
+   ```bash
+   rm -f "${TMPDIR:-/tmp}"/room-booking-e2e-*
+   ```
+
+On Windows, `Remove-Item` refuses to delete a file that a running API still has open, which is an extra safeguard. On GitHub Actions nothing needs to be cleaned up, because each job runs on a new machine.
 
 ### Fixed time and test data
 

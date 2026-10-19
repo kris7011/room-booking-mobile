@@ -1,11 +1,14 @@
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 // Everything the E2E run needs to know about where things live. Playwright
 // loads this module in the runner and again in each worker, so values that
-// must be identical everywhere (the run directory) are passed on through
+// must be identical everywhere (the database path) are passed on through
 // process.env, which workers inherit.
+//
+// Loading this module has no side effects on disk: `playwright test --list`
+// creates and deletes nothing.
 
 /** Root of this repository. */
 export const MOBILE_DIR = resolve(__dirname, '..', '..');
@@ -27,32 +30,28 @@ export const WEB_PORT = 8181;
 export const API_URL = `http://localhost:${API_PORT}`;
 export const WEB_URL = `http://localhost:${WEB_PORT}`;
 
-const RUNS_ROOT = join(tmpdir(), 'room-booking-e2e');
+/** All E2E databases start with this, so they are easy to find and remove by hand. */
+export const DATABASE_PREFIX = 'room-booking-e2e-';
 
 /**
- * A fresh directory per test run that holds the run's SQLite database. It is
- * outside both repositories, so test data can never end up in Git.
+ * A new SQLite database file for every test run, named after the start time
+ * plus a random part, e.g. room-booking-e2e-2026-10-19T11-30-00-000Z-1a2b3c4d.db.
+ * It lies in the system temp folder, which always exists, outside both
+ * repositories, so test data can never end up in Git. The API creates the
+ * file and its -wal/-shm companions when it starts.
+ *
+ * The tests never delete it, nor any other run's database. Playwright stops
+ * the API only after every teardown hook has run, so a test hook cannot know
+ * when the file is closed; another run may also still be using its own file.
+ * README.md ("The isolated test database") describes safe manual cleanup.
  */
-export const RUN_DIR = (process.env.E2E_RUN_DIR ??= join(RUNS_ROOT, `run-${Date.now()}-${process.pid}`));
-export const DATABASE_PATH = join(RUN_DIR, 'meeting-room-booking-e2e.db');
+export const DATABASE_PATH = (process.env.E2E_DATABASE_PATH ??= join(
+  tmpdir(),
+  `${DATABASE_PREFIX}${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}.db`,
+));
 
 /** Where the exported web app, the HTML report and failure traces go (gitignored). */
 export const OUTPUT_DIR = join(MOBILE_DIR, 'e2e', '.output');
-
-/**
- * Creates this run's directory and removes those of earlier runs. They cannot
- * be removed at the end of a run: the API still holds the database file open
- * until Playwright stops it, after all teardown hooks have run.
- */
-export function prepareRunDirectory(): void {
-  if (existsSync(RUNS_ROOT)) {
-    for (const entry of readdirSync(RUNS_ROOT)) {
-      const path = join(RUNS_ROOT, entry);
-      if (path !== RUN_DIR) rmSync(path, { recursive: true, force: true, maxRetries: 3 });
-    }
-  }
-  mkdirSync(RUN_DIR, { recursive: true });
-}
 
 /**
  * Environment for an API process that uses the run's own database. The

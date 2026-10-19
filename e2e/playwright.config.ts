@@ -13,7 +13,6 @@ import {
   WEB_URL,
   backendArguments,
   backendEnvironment,
-  prepareRunDirectory,
 } from './support/environment';
 import { TIME_ZONE } from './support/test-data';
 
@@ -31,14 +30,12 @@ if (!existsSync(BACKEND_PROJECT)) {
   );
 }
 
-// The config is loaded again in each worker; only the first load (in the
-// runner, before any server starts) sets up the run directory.
-if (!process.env.E2E_RUN_PREPARED) {
-  prepareRunDirectory();
-  process.env.E2E_RUN_PREPARED = '1';
-}
-
 const isCI = !!process.env.CI;
+
+// The HTML reporter also runs for `playwright test --list` and then replaces
+// the last run's report with an empty one. Listing tests must not touch
+// earlier results, so it is left out in that case.
+const isListOnly = process.argv.includes('--list');
 
 // Locally the installed Google Chrome is reused, so nothing is downloaded.
 // E2E_BROWSER_CHANNEL=bundled uses Playwright's own Chromium instead
@@ -64,7 +61,7 @@ export default defineConfig({
   reporter: [
     ...(isCI ? [['github'] as const] : []),
     ['list'],
-    ['html', { outputFolder: join(OUTPUT_DIR, 'report'), open: 'never' }],
+    ...(isListOnly ? [] : [['html', { outputFolder: join(OUTPUT_DIR, 'report'), open: 'never' }] as const]),
   ],
 
   use: {
