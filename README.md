@@ -18,15 +18,15 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 
 | Platform | Status |
 |---|---|
-| **Web** | **Tested.** Bundling works. Rendered in headless Chrome at 600 px and at a 375 px phone viewport. The whole flow was clicked through in demo mode: search, "no free rooms", results, form validation, booking, refreshed availability. In live mode with the backend switched off, the connection error is shown. |
+| **Web** | **Tested.** Bundling works. Rendered in headless Chrome at 600 px and at a 375 px phone viewport. The whole flow was clicked through in demo mode: search, "no free rooms", results, form validation, booking, refreshed availability. Tested in live mode against the real .NET API: room overview, search, booking saved in SQLite, overlap (409) message, and the connection error with the backend switched off. See [docs/backend-integration.md](docs/backend-integration.md). |
 | **Android** | **Not tested yet**, on neither an emulator nor a physical device. |
 | **iOS** | **Not tested yet**, on neither a simulator nor a physical device. |
 
 The app only uses React Native core components and `react-native-safe-area-context`, both of which are included in Expo Go. No development build is needed. Native layout, the keyboard and safe areas still need to be checked on a device.
 
-Also not tested: requests to a real running backend. The API client is tested automatically against a mocked `fetch` that copies the backend's contract (see [Tests](#tests)), but has never talked to the actual .NET API.
+The API client is tested automatically against a mocked `fetch` that copies the backend's contract (see [Tests](#tests)). It has also been tested by hand against the real running .NET API in a browser, see [docs/backend-integration.md](docs/backend-integration.md).
 
-The web checks were done once by hand and with a one-off headless-Chrome script. CI does not run UI tests.
+The web checks were done by hand and with one-off headless-Chrome scripts. CI does not run UI tests or tests against a real backend.
 
 ## Tech stack
 
@@ -64,7 +64,7 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 
 ### Connecting to the real API
 
-1. Start the backend from the `meeting-room-booking` repository. Its `http` profile listens on `http://localhost:5003`.
+1. Start the backend from the `meeting-room-booking` repository. Its `http` profile listens on `http://localhost:5003`. Step-by-step instructions for both projects are in [docs/backend-integration.md](docs/backend-integration.md).
 2. Copy `.env.example` to `.env.local` (gitignored) and set the address for the device you use:
 
    | App runs on | `EXPO_PUBLIC_API_URL` |
@@ -72,7 +72,7 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
    | iOS Simulator | `http://localhost:5003` |
    | Android Emulator | `http://10.0.2.2:5003` (the emulator's alias for your PC) |
    | Physical phone with Expo Go | `http://<your PC's LAN IP>:5003` |
-   | Web browser on the same PC | `http://localhost:5003` (needs CORS, see below) |
+   | Web browser on the same PC | `http://localhost:5003` |
 
 3. Restart `npm start`, then reload the app (press `r`).
 
@@ -80,7 +80,7 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 
 **Physical phone:** the API must listen on all network interfaces (`dotnet run --urls http://0.0.0.0:5003`). The phone must be on the same Wi-Fi, and Windows Firewall must allow inbound TCP 5003.
 
-**Web:** the API currently has no CORS policy, so the browser blocks requests from `http://localhost:8081`. Native apps are not affected. Allowing that origin in the API's development configuration fixes it.
+**Web:** the page is served from `http://localhost:8081` and the API from port 5003, so the browser only lets the app read API responses if the API allows that origin through CORS. The API does this in its Development environment, which the `http` launch profile uses. If you run Expo on another port, add it to `Cors:AllowedOrigins` in the API's `appsettings.Development.json`. Native apps are not affected by CORS.
 
 `EXPO_PUBLIC_*` values are embedded in the app bundle. Never put secrets in them.
 
@@ -124,6 +124,7 @@ tests/
   utils/                 Dates, time zones and daylight saving time
   support/               Test setup: demo/live mode and a fixed time zone
 scripts/run-tests.js     Compiles and runs the tests (used by npm test)
+docs/                    How to run against the real backend, and test results
 tsconfig.test.json       Compiles src/**/*.ts and tests/ to .test-build/
 .github/workflows/ci.yml GitHub Actions pipeline
 ```
@@ -141,7 +142,7 @@ Covered:
 - **Live API client:** exact URLs, query encoding, headers, JSON body, 201/400/404/409/500, non-JSON bodies, network failures and the 10-second timeout. `fetch` is replaced with a mock (`mock.method`) and timers are faked, so no real requests are made.
 - **Error messages and environment handling.**
 
-Not covered yet: React components (this needs `jest-expo` and React Native Testing Library) and end-to-end tests against a running backend.
+Not covered yet: React components (this needs `jest-expo` and React Native Testing Library) and automated end-to-end tests against a running backend. A manual end-to-end run is documented in [docs/backend-integration.md](docs/backend-integration.md).
 
 `scripts/run-tests.js` fails the run if the number of compiled test files does not match `tests/**/*.test.ts`. Without this check, a config mistake could make Node run zero tests and still report success.
 
