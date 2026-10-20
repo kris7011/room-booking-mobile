@@ -17,7 +17,9 @@ export function Chip({ label, caption, selected, onPress, accessibilityLabel }: 
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ selected }}
+      // aria-selected rather than accessibilityState: React Native Web only
+      // maps the former to the DOM; iOS and Android understand both.
+      aria-selected={selected}
       style={({ pressed }) => [styles.chip, selected && styles.selected, pressed && !selected && styles.pressed]}
     >
       <View style={styles.content}>

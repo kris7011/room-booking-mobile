@@ -48,6 +48,26 @@ export class HomePage {
     return this.page.getByRole('button', { name: `${room.name}, plads til ${room.capacity}`, exact: true });
   }
 
+  /**
+   * The day chip `index` days after today (0 = "I dag"). With the clock at
+   * FIXED_NOW, index 0 is 4 March 2030.
+   */
+  dayChip(index: number): Locator {
+    const caption = `${4 + index}. mar`;
+    return this.page.getByRole('button').filter({ has: this.page.getByText(caption, { exact: true }) });
+  }
+
+  /** Left and right edge of the horizontally scrolling day strip, in page pixels. */
+  async dayStripBounds(): Promise<{ left: number; right: number }> {
+    return this.dayChip(0).evaluate((chip) => {
+      let strip = chip.parentElement;
+      while (strip && strip.scrollWidth <= strip.clientWidth) strip = strip.parentElement;
+      if (!strip) throw new Error('No horizontally scrolling parent found for the day chips.');
+      const { left, right } = strip.getBoundingClientRect();
+      return { left, right };
+    });
+  }
+
   async chooseParticipants(count: number): Promise<void> {
     await this.page.getByRole('button', { name: `${count} deltagere`, exact: true }).click();
   }

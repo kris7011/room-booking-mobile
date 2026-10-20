@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { describeError } from '../api/error-messages';
 import { roomBookingApi } from '../api/room-booking-api';
 import { AllRoomsList } from '../components/AllRoomsList';
 import { ApiModeBanner } from '../components/ApiModeBanner';
+import { KeyboardAwareScrollView } from '../components/KeyboardAwareScrollView';
 import { SearchForm } from '../components/SearchForm';
 import { SearchResults } from '../components/SearchResults';
 import { StatusMessage } from '../components/StatusMessage';
@@ -101,67 +102,61 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          // Taps on buttons work immediately even while the keyboard is open.
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.column}>
-            <View style={styles.header}>
-              <Text style={styles.eyebrow}>Room Booking</Text>
-              <Text style={styles.title}>Find et ledigt mødelokale</Text>
-              <Text style={styles.subtitle}>Vælg antal deltagere og tidspunkt, så finder vi de lokaler, der passer.</Text>
-            </View>
-
-            <ApiModeBanner />
-
-            <SearchForm
-              criteria={criteria}
-              today={today}
-              onChange={handleCriteriaChange}
-              onSearch={handleSearch}
-              searching={search.status === 'loading'}
-              validationMessage={validationMessage}
-            />
-
-            {lastBooking ? (
-              <StatusMessage
-                variant="success"
-                title={isDemoMode ? 'Demo-booking oprettet (ikke gemt)' : 'Booking oprettet'}
-                message={`${lastBooking.title} i ${lastBooking.roomName}, ${formatRange(
-                  new Date(lastBooking.startUtc),
-                  new Date(lastBooking.endUtc),
-                )}. Booking nr. ${lastBooking.id}.`}
-              />
-            ) : null}
-
-            {searched ? (
-              <SearchResults
-                state={search}
-                start={searched.start}
-                end={searched.end}
-                participants={searched.participants}
-                selectedRoomId={selectedRoomId}
-                onSelectRoom={setSelectedRoomId}
-                onRetry={() => {
-                  if (searchedCriteria) void runSearch(searchedCriteria);
-                }}
-                onBooked={handleBooked}
-              />
-            ) : (
-              <AllRoomsList state={allRooms} onRetry={() => void loadAllRooms()} />
-            )}
+      {/* Keeps the booking form's inputs above the keyboard, also on Android. */}
+      <KeyboardAwareScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.column}>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>Room Booking</Text>
+            <Text style={styles.title}>Find et ledigt mødelokale</Text>
+            <Text style={styles.subtitle}>Vælg antal deltagere og tidspunkt, så finder vi de lokaler, der passer.</Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+          <ApiModeBanner />
+
+          <SearchForm
+            criteria={criteria}
+            today={today}
+            onChange={handleCriteriaChange}
+            onSearch={handleSearch}
+            searching={search.status === 'loading'}
+            validationMessage={validationMessage}
+          />
+
+          {lastBooking ? (
+            <StatusMessage
+              variant="success"
+              title={isDemoMode ? 'Demo-booking oprettet (ikke gemt)' : 'Booking oprettet'}
+              message={`${lastBooking.title} i ${lastBooking.roomName}, ${formatRange(
+                new Date(lastBooking.startUtc),
+                new Date(lastBooking.endUtc),
+              )}. Booking nr. ${lastBooking.id}.`}
+            />
+          ) : null}
+
+          {searched ? (
+            <SearchResults
+              state={search}
+              start={searched.start}
+              end={searched.end}
+              participants={searched.participants}
+              selectedRoomId={selectedRoomId}
+              onSelectRoom={setSelectedRoomId}
+              onRetry={() => {
+                if (searchedCriteria) void runSearch(searchedCriteria);
+              }}
+              onBooked={handleBooked}
+            />
+          ) : (
+            <AllRoomsList state={allRooms} onRetry={() => void loadAllRooms()} />
+          )}
+        </View>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  flex: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingBottom: spacing.xxl },
   // Keeps the layout readable on tablets and wide browser windows.
   column: { width: '100%', maxWidth: 640, alignSelf: 'center', gap: spacing.xl },
