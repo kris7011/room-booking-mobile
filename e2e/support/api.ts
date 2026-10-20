@@ -29,6 +29,11 @@ export class BookingApi {
     return (await response.json()) as BookingResponse[];
   }
 
+  /** Raw PUT, for tests that check error responses. */
+  putBooking(id: number, body: SaveBookingRequest): Promise<APIResponse> {
+    return this.request.put(`/api/bookings/${id}`, { data: body });
+  }
+
   getBooking(id: number): Promise<APIResponse> {
     return this.request.get(`/api/bookings/${id}`);
   }

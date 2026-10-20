@@ -21,6 +21,7 @@ export class HomePage {
   readonly startTime: Locator;
   readonly endTime: Locator;
   readonly passedWarning: Locator;
+  readonly bookingStartedWarning: Locator;
 
   constructor(readonly page: Page) {
     this.apiBanner = page.getByText(`API: ${API_URL}`, { exact: true });
@@ -35,6 +36,7 @@ export class HomePage {
     this.startTime = page.getByLabel(/^Start \d\d:\d\d$/);
     this.endTime = page.getByLabel(/^Slut \d\d:\d\d$/);
     this.passedWarning = page.getByText('Tidspunktet er passeret', { exact: true }).locator('..');
+    this.bookingStartedWarning = page.getByText('Mødets starttidspunkt er passeret', { exact: true }).locator('..');
   }
 
   /** Opens the app and waits until it has asked the API for the room list. */

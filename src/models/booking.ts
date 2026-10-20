@@ -16,6 +16,14 @@ export interface SaveBookingRequest {
   endUtc: string;
 }
 
+/** What the user has typed into the booking form, kept across new searches. */
+export interface BookingDraft {
+  title: string;
+  bookedBy: string;
+}
+
+export const EMPTY_BOOKING_DRAFT: BookingDraft = { title: '', bookedBy: '' };
+
 // Returned by POST /api/bookings with 201 Created.
 export interface BookingResponse {
   id: number;

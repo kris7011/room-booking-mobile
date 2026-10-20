@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, mock, test } from 'node:test';
 
 import { demoApi } from '../../src/api/demo-api';
-import { describeError } from '../../src/api/error-messages';
+import { describeError, isStartNotInFutureError } from '../../src/api/error-messages';
 import { ApiError } from '../../src/api/http-client';
 import { roomBookingApi } from '../../src/api/room-booking-api';
 import { isDemoMode } from '../../src/config/env';
@@ -218,4 +218,43 @@ describe('overlapping bookings are rejected with 409', () => {
 
 test('booking an unknown room fails with 404 meeting_room_not_found', async () => {
   await assertApiError(book(uniqueDay(), 99, '15:00', '16:00'), 404, 'meeting_room_not_found');
+});
+
+describe('bookings that do not start in the future are rejected with 400, like the API', () => {
+  function bookAt(start: Date, roomId = 1) {
+    return settle(
+      roomBookingApi.createBooking({
+        roomId,
+        title: 'Planning',
+        bookedBy: 'Test',
+        startUtc: start.toISOString(),
+        endUtc: new Date(start.getTime() + 60 * 60 * 1000).toISOString(),
+      }),
+    );
+  }
+
+  test('a start in the past or exactly now is a validation problem on startUtc', async () => {
+    for (const start of [new Date(2020, 0, 6, 9), new Date(Date.now() - 60_000), new Date(Date.now())]) {
+      await assert.rejects(bookAt(start), (error: unknown) => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.status, 400);
+        assert.deepEqual(error.problem?.errors, { startUtc: ['The start time must be later than the current time.'] });
+        assert.ok(isStartNotInFutureError(error));
+        return true;
+      });
+    }
+  });
+
+  test('it is reported before an unknown room, in the same order as the API', async () => {
+    await assert.rejects(bookAt(new Date(2020, 0, 6, 9), 99), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 400);
+      return true;
+    });
+  });
+
+  test('a start in the future is booked', async () => {
+    const booking = await bookAt(new Date(Date.now() + 60 * 60 * 1000));
+    assert.equal(booking.roomId, 1);
+  });
 });

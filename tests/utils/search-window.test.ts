@@ -5,7 +5,7 @@ import { describe, test } from 'node:test';
 
 import type { SearchWindow } from '../../src/models/search-criteria';
 import { atMinutes, defaultSearchWindow, weekdayLabel } from '../../src/utils/date-time';
-import { checkSearchWindow, hasStarted, resolveSearchWindow } from '../../src/utils/search-window';
+import { checkSearchWindow, describeStartedWindow, hasStarted, resolveSearchWindow } from '../../src/utils/search-window';
 
 // Local times are Europe/Copenhagen (see support/time-zone.ts). 20 October
 // 2026 is a Tuesday.
@@ -93,6 +93,29 @@ describe('a chosen time that has passed', () => {
 
   test('a day ahead is never reported as passed', () => {
     assert.equal(checkSearchWindow(window(new Date(2026, 9, 21), '06:00', '06:30'), at(21, 59)), null);
+  });
+});
+
+describe('a start rejected by the server while the device clock is behind', () => {
+  test('the suggestion lies after the rejected start, never the same time again', () => {
+    // The phone says 09:59:50, the server already 10:00:05.
+    const rejected = window(at(0), '10:00', '11:00');
+    const phoneNow = at(9, 59, 50);
+    assert.equal(checkSearchWindow(rejected, phoneNow), null);
+    assert.deepEqual(describeStartedWindow(rejected, phoneNow), {
+      message: 'Starttidspunktet 10:00 i dag er passeret.',
+      suggestion: window(at(0), '10:30', '11:30'),
+      suggestionLabel: 'I dag 10:30–11:30',
+    });
+  });
+
+  test('when the device clock agrees, it is the same as checkSearchWindow', () => {
+    const chosen = window(at(0), '10:00', '11:00');
+    assert.deepEqual(describeStartedWindow(chosen, at(10, 5)), checkSearchWindow(chosen, at(10, 5)));
+  });
+
+  test('a rejected last slot of the day suggests tomorrow morning', () => {
+    assert.deepEqual(describeStartedWindow(window(at(0), '21:00', '22:00'), at(20, 59)).suggestion, window(new Date(2026, 9, 21), '09:00', '10:00'));
   });
 });
 
