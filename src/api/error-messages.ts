@@ -1,6 +1,20 @@
 import { apiBaseUrl } from '../config/env';
 import { ApiError } from './http-client';
 
+/**
+ * The API's 400 for a start time that is not after the server's current time
+ * (a validation problem on startUtc). The booking form handles it as "the
+ * meeting has started" rather than as a generic error.
+ */
+export function isStartNotInFutureError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.kind === 'http' &&
+    error.status === 400 &&
+    (error.problem?.errors?.startUtc?.length ?? 0) > 0
+  );
+}
+
 // Turns any thrown value into a message a user can act on.
 export function describeError(error: unknown): string {
   if (!(error instanceof ApiError)) {
@@ -33,6 +47,10 @@ function describeHttpError(error: ApiError): string {
   }
   if (code === 'meeting_room_not_found') {
     return 'Mødelokalet findes ikke længere.';
+  }
+
+  if (isStartNotInFutureError(error)) {
+    return 'Mødets starttidspunkt er passeret ifølge serveren. Vælg et senere tidspunkt.';
   }
 
   // Validation problems carry per-field messages from the server.

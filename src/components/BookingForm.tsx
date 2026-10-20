@@ -1,9 +1,9 @@
 import { useRef, useState, type ComponentPropsWithRef } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
 
-import { describeError } from '../api/error-messages';
+import { describeError, isStartNotInFutureError } from '../api/error-messages';
 import { roomBookingApi } from '../api/room-booking-api';
-import { MAX_BOOKED_BY_LENGTH, MAX_TITLE_LENGTH, type BookingResponse } from '../models/booking';
+import { MAX_BOOKED_BY_LENGTH, MAX_TITLE_LENGTH, type BookingDraft, type BookingResponse } from '../models/booking';
 import type { MeetingRoom } from '../models/room';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { formatRange } from '../utils/date-time';
@@ -11,7 +11,27 @@ import { useRevealFocusedInput } from './KeyboardAwareScrollView';
 import { PrimaryButton } from './PrimaryButton';
 import { StatusMessage } from './StatusMessage';
 
-interface BookingFormProps {
+/** Shown once the meeting's start has passed while the form is open. */
+export interface StartedBookingNotice {
+  message: string;
+  /** e.g. "Søg igen: I dag 10:30–11:30". */
+  actionLabel: string;
+}
+
+/** What the screen provides to the booking form, whichever room is open. */
+export interface BookingFormContext {
+  /** Title and name, kept by the screen so a new search does not lose them. */
+  draft: BookingDraft;
+  onDraftChange: (draft: BookingDraft) => void;
+  /** Set when the start has passed, by the device clock or according to the server. */
+  started: StartedBookingNotice | null;
+  /** Searches again from the next possible time, keeping the draft. */
+  onChooseNewTime: () => void;
+  /** The start turned out to have passed when sending; `byServer` if the API said so. */
+  onStartPassed: (byServer: boolean) => void;
+}
+
+interface BookingFormProps extends BookingFormContext {
   room: MeetingRoom;
   start: Date;
   end: Date;
@@ -19,9 +39,19 @@ interface BookingFormProps {
   onCancel: () => void;
 }
 
-export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFormProps) {
-  const [title, setTitle] = useState('');
-  const [bookedBy, setBookedBy] = useState('');
+export function BookingForm({
+  room,
+  start,
+  end,
+  draft,
+  onDraftChange,
+  started,
+  onChooseNewTime,
+  onStartPassed,
+  onBooked,
+  onCancel,
+}: BookingFormProps) {
+  const { title, bookedBy } = draft;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showValidation, setShowValidation] = useState(false);
@@ -34,7 +64,14 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
 
   const submit = async () => {
     setShowValidation(true);
-    if (!isValid) return;
+    if (!isValid || started || submitting) return;
+
+    // The screen's clock only ticks at slot boundaries and a timer can be
+    // late, so check the time again right before sending.
+    if (start.getTime() <= Date.now()) {
+      onStartPassed(false);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -48,7 +85,13 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
       });
       onBooked(booking);
     } catch (caught) {
-      setError(describeError(caught));
+      if (isStartNotInFutureError(caught)) {
+        // The server's clock says the meeting has started: show the same
+        // notice as when the device notices it, not a generic error.
+        onStartPassed(true);
+      } else {
+        setError(describeError(caught));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -64,7 +107,7 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
       <LabeledInput
         label="Mødets titel"
         value={title}
-        onChangeText={setTitle}
+        onChangeText={(text) => onDraftChange({ ...draft, title: text })}
         placeholder="F.eks. Sprint planning"
         maxLength={MAX_TITLE_LENGTH}
         error={showValidation ? titleError : null}
@@ -78,7 +121,7 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
         ref={bookedByRef}
         label="Booket af"
         value={bookedBy}
-        onChangeText={setBookedBy}
+        onChangeText={(text) => onDraftChange({ ...draft, bookedBy: text })}
         placeholder="Dit navn"
         maxLength={MAX_BOOKED_BY_LENGTH}
         error={showValidation ? bookedByError : null}
@@ -88,14 +131,24 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
         onSubmitEditing={submit}
       />
 
-      {error ? <StatusMessage variant="error" title="Bookingen blev ikke oprettet" message={error} /> : null}
+      {started ? (
+        <StatusMessage
+          variant="warning"
+          title="Mødets starttidspunkt er passeret"
+          message={`${started.message} Bookingen kan ikke bekræftes. Vælg et nyt tidspunkt – titel og navn bliver bevaret.`}
+          actionLabel={started.actionLabel}
+          onAction={onChooseNewTime}
+        />
+      ) : error ? (
+        <StatusMessage variant="error" title="Bookingen blev ikke oprettet" message={error} />
+      ) : null}
 
       <View style={styles.actions}>
         <View style={styles.action}>
           <PrimaryButton label="Annuller" onPress={onCancel} variant="secondary" disabled={submitting} />
         </View>
         <View style={styles.action}>
-          <PrimaryButton label="Bekræft booking" onPress={submit} loading={submitting} />
+          <PrimaryButton label="Bekræft booking" onPress={submit} loading={submitting} disabled={started !== null} />
         </View>
       </View>
     </View>

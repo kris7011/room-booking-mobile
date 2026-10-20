@@ -29,7 +29,17 @@ export interface StartedWindow {
 
 /** Null while `window` still lies ahead; otherwise what to tell the user. */
 export function checkSearchWindow(window: SearchWindow, now: Date): StartedWindow | null {
-  if (!hasStarted(window, now)) return null;
+  return hasStarted(window, now) ? describeStartedWindow(window, now) : null;
+}
+
+/**
+ * What to tell the user about a window that has started, also when only the
+ * server says so (the device clock may be behind). The suggestion then lies
+ * after the rejected start, so the same time is never offered again.
+ */
+export function describeStartedWindow(window: SearchWindow, now: Date): StartedWindow {
+  const start = atMinutes(window.day, window.startMinutes);
+  const after = start.getTime() > now.getTime() ? start : now;
 
   // Only today or an earlier day can have started, e.g. after midnight.
   const message = isSameDay(window.day, now)
@@ -39,7 +49,7 @@ export function checkSearchWindow(window: SearchWindow, now: Date): StartedWindo
         atMinutes(window.day, window.endMinutes),
       )}, er passeret.`;
 
-  const suggestion = defaultSearchWindow(now, window.endMinutes - window.startMinutes);
+  const suggestion = defaultSearchWindow(after, window.endMinutes - window.startMinutes);
   const suggestionLabel = `${weekdayLabel(suggestion.day, now)} ${formatMinutes(suggestion.startMinutes)}–${formatMinutes(
     suggestion.endMinutes,
   )}`;

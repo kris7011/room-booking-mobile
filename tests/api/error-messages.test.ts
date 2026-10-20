@@ -3,7 +3,7 @@ import { TEST_API_URL } from '../support/live-mode';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { describeError } from '../../src/api/error-messages';
+import { describeError, isStartNotInFutureError } from '../../src/api/error-messages';
 import { ApiError } from '../../src/api/http-client';
 
 describe('describeError', () => {
@@ -51,6 +51,28 @@ describe('describeError', () => {
       describeError(error),
       'Ugyldige oplysninger: A booking title is required. Booked by cannot exceed 120 characters.',
     );
+  });
+
+  test('400 on startUtc (start not after the server time) is explained in Danish', () => {
+    const error = new ApiError('http', 'x', 400, {
+      status: 400,
+      title: 'One or more validation errors occurred.',
+      errors: { startUtc: ['The start time must be later than the current time.'] },
+    });
+    assert.ok(isStartNotInFutureError(error));
+    assert.equal(
+      describeError(error),
+      'Mødets starttidspunkt er passeret ifølge serveren. Vælg et senere tidspunkt.',
+    );
+  });
+
+  test('only a 400 with a startUtc field error counts as "start has passed"', () => {
+    const titleOnly = new ApiError('http', 'x', 400, { errors: { title: ['A booking title is required.'] } });
+    const conflict = new ApiError('http', 'x', 409, { code: 'booking_overlap', errors: { startUtc: ['x'] } });
+    assert.equal(isStartNotInFutureError(titleOnly), false);
+    assert.equal(isStartNotInFutureError(conflict), false);
+    assert.equal(isStartNotInFutureError(new ApiError('network', 'x')), false);
+    assert.equal(isStartNotInFutureError(new Error('x')), false);
   });
 
   test('400 without field errors falls back to detail, then title', () => {

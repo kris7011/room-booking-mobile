@@ -65,9 +65,12 @@ jobs:
         run: npm ci
 
       # Built here so build errors show up in their own step; the test run
-      # then only starts it.
+      # then only starts it. Same artifacts path as backendArguments() in
+      # e2e/support/environment.ts.
       - name: Build the API
-        run: dotnet build meeting-room-booking/src/MeetingRoomBooking.Api/MeetingRoomBooking.Api.csproj
+        run: >-
+          dotnet build meeting-room-booking/src/MeetingRoomBooking.Api/MeetingRoomBooking.Api.csproj
+          --artifacts-path room-booking-mobile/e2e/.output/api-build
 
       - name: Read Playwright version
         id: playwright

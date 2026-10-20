@@ -70,7 +70,23 @@ export function backendEnvironment(port: number): Record<string, string> {
   };
 }
 
+/**
+ * Where the E2E run builds the API: its own folder instead of the API's bin/
+ * and obj/. A development API started from the same checkout (`dotnet run`)
+ * keeps MeetingRoomBooking.Api.exe locked, so building into bin/ would fail
+ * as soon as the API's source changes, and would replace its files.
+ */
+export const BACKEND_BUILD_DIR = join(OUTPUT_DIR, 'api-build');
+
 /** `dotnet run` arguments for the API; --no-launch-profile so launchSettings.json cannot change port or database. */
 export function backendArguments({ build }: { build: boolean }): string[] {
-  return ['run', '--project', BACKEND_PROJECT, '--no-launch-profile', ...(build ? [] : ['--no-build'])];
+  return [
+    'run',
+    '--project',
+    BACKEND_PROJECT,
+    '--artifacts-path',
+    BACKEND_BUILD_DIR,
+    '--no-launch-profile',
+    ...(build ? [] : ['--no-build']),
+  ];
 }

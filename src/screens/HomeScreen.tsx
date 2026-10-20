@@ -8,17 +8,18 @@ import { AllRoomsList } from '../components/AllRoomsList';
 import { ApiModeBanner } from '../components/ApiModeBanner';
 import { KeyboardAwareScrollView } from '../components/KeyboardAwareScrollView';
 import { SearchForm } from '../components/SearchForm';
+import type { StartedBookingNotice } from '../components/BookingForm';
 import { SearchResults } from '../components/SearchResults';
 import { StatusMessage } from '../components/StatusMessage';
 import { isDemoMode } from '../config/env';
 import { useClock } from '../hooks/useClock';
-import type { BookingResponse } from '../models/booking';
+import { EMPTY_BOOKING_DRAFT, type BookingDraft, type BookingResponse } from '../models/booking';
 import type { LoadState } from '../models/load-state';
 import type { MeetingRoom } from '../models/room';
 import type { SearchCriteria, SearchWindow } from '../models/search-criteria';
 import { colors, spacing, typography } from '../theme/theme';
 import { atMinutes, formatRange } from '../utils/date-time';
-import { checkSearchWindow, hasStarted, resolveSearchWindow } from '../utils/search-window';
+import { checkSearchWindow, describeStartedWindow, hasStarted, resolveSearchWindow } from '../utils/search-window';
 
 const DEFAULT_PARTICIPANTS = 4;
 
@@ -41,6 +42,12 @@ export function HomeScreen() {
   const [searchedCriteria, setSearchedCriteria] = useState<SearchCriteria | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [lastBooking, setLastBooking] = useState<BookingResponse | null>(null);
+  // Lives here, not in the booking form, so a new search (e.g. for a new
+  // time after the old one passed) does not lose what the user typed.
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft>(EMPTY_BOOKING_DRAFT);
+  // The API rejected the searched start as not in the future, although the
+  // device clock may still think it is (a clock that is behind).
+  const [startRejectedByServer, setStartRejectedByServer] = useState(false);
 
   // Lets us ignore a slow response that arrives after a newer search started.
   const latestSearchId = useRef(0);
@@ -61,10 +68,12 @@ export function HomeScreen() {
 
   const started = checkSearchWindow(searchWindow, now);
 
-  const runSearch = async (searchFor: SearchCriteria) => {
+  /** `reopenRoomId`: open that room's booking form again if it is still free. */
+  const runSearch = async (searchFor: SearchCriteria, reopenRoomId: number | null = null) => {
     const searchId = ++latestSearchId.current;
     setSearchedCriteria(searchFor);
     setSelectedRoomId(null);
+    setStartRejectedByServer(false);
     setSearch({ status: 'loading' });
 
     try {
@@ -75,6 +84,9 @@ export function HomeScreen() {
       });
       if (searchId === latestSearchId.current) {
         setSearch({ status: 'success', data: rooms });
+        if (reopenRoomId !== null && rooms.some((room) => room.id === reopenRoomId)) {
+          setSelectedRoomId(reopenRoomId);
+        }
       }
     } catch (error) {
       if (searchId === latestSearchId.current) {
@@ -101,8 +113,40 @@ export function HomeScreen() {
 
   const handleBooked = (booking: BookingResponse) => {
     setLastBooking(booking);
+    setBookingDraft(EMPTY_BOOKING_DRAFT);
     // Refresh availability so the booked room disappears from the results.
     if (searchedCriteria) void runSearch(searchedCriteria);
+  };
+
+  // An open booking form keeps the search it was made for. Once that start
+  // has passed (or the server says so), confirming is blocked and the form
+  // offers to search again from the next possible time.
+  const bookingStarted =
+    searchedCriteria && (startRejectedByServer || hasStarted(searchedCriteria, now))
+      ? describeStartedWindow(searchedCriteria, now)
+      : null;
+  const bookingNotice: StartedBookingNotice | null = bookingStarted && {
+    message:
+      startRejectedByServer && searchedCriteria && !hasStarted(searchedCriteria, now)
+        ? `${bookingStarted.message} Serveren afviste bookingen – telefonens ur går muligvis forkert.`
+        : bookingStarted.message,
+    actionLabel: `Søg igen: ${bookingStarted.suggestionLabel}`,
+  };
+
+  const handleStartPassed = (byServer: boolean) => {
+    if (byServer) setStartRejectedByServer(true);
+    // The clock may lag behind the moment the start passed.
+    refreshClock();
+  };
+
+  const handleChooseNewTime = () => {
+    if (!searchedCriteria || !bookingStarted) return;
+    const next: SearchCriteria = { ...bookingStarted.suggestion, participants: searchedCriteria.participants };
+    // The search form shows the new time as the user's choice.
+    setChosenWindow(bookingStarted.suggestion);
+    setParticipants(next.participants);
+    setLastBooking(null);
+    void runSearch(next, selectedRoomId);
   };
 
   const searched = searchedCriteria && {
@@ -157,6 +201,13 @@ export function HomeScreen() {
                 if (searchedCriteria) void runSearch(searchedCriteria);
               }}
               onBooked={handleBooked}
+              bookingForm={{
+                draft: bookingDraft,
+                onDraftChange: setBookingDraft,
+                started: bookingNotice,
+                onChooseNewTime: handleChooseNewTime,
+                onStartPassed: handleStartPassed,
+              }}
             />
           ) : (
             <AllRoomsList state={allRooms} onRetry={() => void loadAllRooms()} />

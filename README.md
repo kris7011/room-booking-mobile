@@ -11,7 +11,7 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 - The suggested time keeps up with the clock while the app is left open, also after the app has been in the background and past midnight. A time the user picked is never changed; when it has passed, the app says so and offers the next possible time. See [Time handling](#time-handling).
 - Search for free rooms, with the smallest fitting room listed first.
 - Loading, error, "no free rooms" and success states.
-- Booking form with client-side validation that matches the API's rules.
+- Booking form with client-side validation that matches the API's rules. A meeting whose start passes while the form is open cannot be confirmed; the form offers to search again from the next possible time and keeps what was typed.
 - Readable messages for API errors such as overlapping bookings (409) and validation errors (400).
 - One code base for Android, iOS and web. Only web has been tested so far, see [Platform status](#platform-status).
 
@@ -131,7 +131,7 @@ tests/
 e2e/                     End-to-end tests (Playwright), see "End-to-end tests"
   playwright.config.ts   Starts the API and the web app, one browser, one test at a time
   global-setup.ts        Refuses to run unless the API uses a new, empty E2E database
-  specs/                 rooms, search, booking, api-errors, clock
+  specs/                 rooms, search, booking, api-errors, clock, past-bookings
   support/               Ports and paths, page object, API helpers, fixtures, fixed test data
   scripts/serve-web.mjs  Exports the web app for the E2E API and serves it
 scripts/run-tests.js     Compiles and runs the tests (used by npm test)
@@ -152,9 +152,9 @@ Covered:
 - **Time that moves on** (`search-window.test.ts`, `clock.test.ts`): the default before, on and after a half hour; the default following the clock; chosen times that are kept and reported once passed, with the next possible time; midnight and "I dag"/"I morgen"; the last bookable slot of the day; summer and winter time, including a zone where midnight does not exist. The clock is driven with Node's mocked timers and a fake background/foreground signal.
 - **Room search (demo):** capacity filter, ordering, busy blocks and empty results.
 - **Overlap rules:** partial, containing and inner overlaps are busy. Back-to-back bookings are allowed, matching the API's `start < otherEnd && end > otherStart`.
-- **Demo bookings:** response shape, trimming, ids, availability updates, 409 for overlaps, and 404 for unknown rooms.
+- **Demo bookings:** response shape, trimming, ids, availability updates, 409 for overlaps, 404 for unknown rooms, and 400 on `startUtc` for a start that is not in the future (checked before the room, like the API).
 - **Live API client:** exact URLs, query encoding, headers, JSON body, 201/400/404/409/500, non-JSON bodies, network failures and the 10-second timeout. `fetch` is replaced with a mock (`mock.method`) and timers are faked, so no real requests are made.
-- **Error messages and environment handling.**
+- **Error messages and environment handling**, including recognising the API's 400 on `startUtc` as "the meeting has started".
 
 Not covered yet: React components in isolation (this needs `jest-expo` and React Native Testing Library). The end-to-end tests cover them in the browser.
 
@@ -251,7 +251,8 @@ The tests wait for real states: an API response (`waitForResponse`), a visible t
 | `clock.spec.ts` | The default time moves on when it passes, without interaction. Coming back from the background (`AppState`) catches up although no timer ran. A chosen time is never changed; once passed, the warning appears, search is blocked and **Brug næste tidspunkt** picks the next one. Text typed into an open booking form survives. At midnight (the night summer time starts) "I morgen" becomes "I dag" and the search is sent with the summer-time offset. |
 | `search.spec.ts` | Local time is sent as UTC. The smallest fitting room is listed first. Capacity filter. Booked rooms are hidden, but back-to-back bookings are not. "Ingen ledige lokaler". |
 | `booking.spec.ts` | Form validation sends nothing. A booking is created (201 with CORS header), shown, stored and hidden from the results, also after a reload. The booking is still there for a new API process on the same file. A double booking gets 409 and the conflict message. |
-| `api-errors.spec.ts` | 400 for an invalid period, capacity, empty fields and a too-long title. 409 for overlaps, 201 for back-to-back bookings. 404 for an unknown room or booking. The app's messages for 400 and 404 responses. |
+| `past-bookings.spec.ts` | The start of an open booking form passes while the user types: warning, *Bekræft booking* disabled, text kept; **Søg igen** searches from the next half hour and reopens the same room with the text, and the booking goes through. The time is checked again right before sending (no request when a late timer has not noticed yet). With the phone's clock years behind, the API's 400 on `startUtc` shows the same warning (with a hint about the clock) instead of an error. |
+| `api-errors.spec.ts` | 400 on `startUtc` when a new booking does not start after the server's time, or an existing one is moved into the past (which leaves it unchanged). 400 for an invalid period, capacity, empty fields and a too-long title. 409 for overlaps, 201 for back-to-back bookings. 404 for an unknown room or booking. The app's messages for 400 and 404 responses. |
 
 Two scenarios cannot be produced by a real user, so the tests steer them:
 
@@ -269,6 +270,7 @@ Two scenarios cannot be produced by a real user, so the tests steer them:
 | `Chromium distribution 'chrome' is not found` | Install Google Chrome, or run `npx playwright install chromium` and set `E2E_BROWSER_CHANNEL=bundled`. |
 | `Timed out waiting … from config.webServer` | The first build of the API or the web export took too long, often on the first run after `npm ci`. Run again, or run `dotnet build` in the API folder first. |
 | `Process from config.webServer was not able to start. Exit code: 1` with `[API] System.OutOfMemoryException` (or `csc.exe` crashing) | Windows has run out of commit memory (RAM + page file), not a problem in the tests. Check *free commit* with `(Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory`; the System event log names the largest consumers ("Windows har diagnosticeret manglende hukommelse"). Close large applications or enlarge the page file, then run again. |
+| `MSB3027`/`MSB3021`: could not copy `apphost.exe` to `bin\Debug\…\MeetingRoomBooking.Api.exe` | An older version built the E2E API into the API's own `bin/`, which a running development API (`dotnet run`) locks. The E2E run now builds into `e2e/.output/api-build` instead; pull the latest version. |
 | `does not contain http://localhost:5103. Refusing to serve it.` | The exported bundle points to another API. Delete `e2e/.output` and run again. |
 | A test fails | `npm run test:e2e:report` shows the step, a screenshot and a trace (network, DOM, console) for each failed test. The raw files are in `e2e/.output/test-results/`. |
 
@@ -283,7 +285,9 @@ The search form has two modes:
 
 `useClock` (`src/hooks/useClock.tsx`, logic in `src/utils/clock.ts`) renews "now" when a new half-hour slot or a new day starts, checks at least once a minute (which also catches a changed device clock or time zone), and checks again when `AppState` reports `active`. The screen only re-renders when the slot, the day or the UTC offset has changed. No native module is involved.
 
-Search results and an open booking form keep describing the search that was made, so what has been typed into the form is not lost when the time moves on. The booking form itself does not block a time that has passed in the meantime; the API accepts it, as before.
+Search results and an open booking form keep describing the search that was made. Once that start has passed, the form shows *Mødets starttidspunkt er passeret*, disables *Bekræft booking* and offers **Søg igen: …**, which searches from the next possible time with the same duration and reopens the same room if it is still free. Title and name live in `HomeScreen`, not in the form, so they survive the new search; they are cleared after a successful booking. Right before sending, the form checks the time again, because the clock only ticks at slot boundaries and a timer can be late.
+
+The API rejects a booking whose start is not after the server's current time with a `400` validation problem on `startUtc` (also for moving an existing booking). The app shows that as the same warning, with a hint that the phone's clock may be wrong if the phone still thinks the start lies ahead, and suggests a time after the rejected one. The demo API applies the same rule.
 
 ### Manual testing on a physical Android device
 
@@ -296,10 +300,12 @@ Install a development build or run in Expo Go (`npm run android`). Turn off batt
 5. **Chosen time.** Press **+** at Start, wait until that start has passed. The time is unchanged, the yellow warning appears, *Søg efter ledige lokaler* is disabled, and **Brug næste tidspunkt** sets the next half hour with the same duration. TalkBack reads the warning when it appears.
 6. **Chosen day.** Pick a day further ahead and leave the app open across a slot change. The day stays selected.
 7. **Booking form.** Search, open a room, type a title and a name, open the keyboard. Wait for a slot change, also with the app briefly in the background. The text, the keyboard behaviour (field above the keyboard) and the booked time are unchanged.
-8. **Midnight.** At about 23:55 open the app (default "I morgen" 09:00). After 00:00, the same chip reads "I dag" and the strip starts on the new day. Repeat with the app in the background over midnight.
-9. **Last slot.** Before 21:00 the default is 21:00–22:00; from 21:00 it is tomorrow 09:00–10:00.
-10. **Summer/winter time.** Set the date to the evening before the last Sunday of March or October (automatic time off, time zone Copenhagen), leave the app open over 02:00–03:00, then search for 09:00 the next day. In the request (or the booking shown) 09:00 is 07:00Z in summer time and 08:00Z in winter time.
-11. **Time zone change.** Change the time zone in Settings while the app is open. Expected: within a minute (or on return to the app) the labels and default follow the new zone. If they only follow after restarting the app, note it: the JavaScript engine may keep the zone it started with.
+8. **Start passes while typing.** Search for the next half hour, open a room and start typing with the keyboard open. When the start passes: the yellow warning appears (TalkBack reads it), *Bekræft booking* is disabled, the keyboard and the text stay. Tap **Søg igen: …**: the same room opens for the new time with the text, and the booking can be confirmed.
+9. **Phone clock behind.** Set the phone's clock (automatic time off) a few minutes behind the PC running the API, so the phone still thinks a start lies ahead that the server considers passed. Confirming shows the warning with *telefonens ur går muligvis forkert*, not an error.
+10. **Midnight.** At about 23:55 open the app (default "I morgen" 09:00). After 00:00, the same chip reads "I dag" and the strip starts on the new day. Repeat with the app in the background over midnight.
+11. **Last slot.** Before 21:00 the default is 21:00–22:00; from 21:00 it is tomorrow 09:00–10:00.
+12. **Summer/winter time.** Set the date to the evening before the last Sunday of March or October (automatic time off, time zone Copenhagen), leave the app open over 02:00–03:00, then search for 09:00 the next day. In the request (or the booking shown) 09:00 is 07:00Z in summer time and 08:00Z in winter time.
+13. **Time zone change.** Change the time zone in Settings while the app is open. Expected: within a minute (or on return to the app) the labels and default follow the new zone. If they only follow after restarting the app, note it: the JavaScript engine may keep the zone it started with.
 
 Reset the device's date and time to automatic afterwards.
 

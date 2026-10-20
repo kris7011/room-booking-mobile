@@ -69,13 +69,23 @@ export const demoApi: RoomBookingApi = {
 
   async createBooking(request: SaveBookingRequest): Promise<BookingResponse> {
     await delay(DEMO_LATENCY_MS);
+    const start = Date.parse(request.startUtc);
+    const end = Date.parse(request.endUtc);
+    // Same rule and order as the API: a start that is not after the current
+    // time is a 400, reported before an unknown room (404).
+    if (start <= Date.now()) {
+      throw new ApiError('http', 'One or more validation errors occurred.', 400, {
+        status: 400,
+        title: 'One or more validation errors occurred.',
+        errors: { startUtc: ['The start time must be later than the current time.'] },
+      });
+    }
+
     const room = demoRooms.find((candidate) => candidate.id === request.roomId);
     if (!room) {
       throw new ApiError('http', 'Meeting room does not exist.', 404, { code: 'meeting_room_not_found' });
     }
 
-    const start = Date.parse(request.startUtc);
-    const end = Date.parse(request.endUtc);
     if (isRoomBusy(room.id, start, end)) {
       throw new ApiError('http', 'The meeting room is already booked during the selected period.', 409, {
         code: 'booking_overlap',

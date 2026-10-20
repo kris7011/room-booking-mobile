@@ -47,6 +47,34 @@ test.describe('API error responses', () => {
     expect(await api.listBookings()).toEqual([]);
   });
 
+  test('POST and PUT /api/bookings reject a start that is not after the server time with 400 on startUtc', async ({ api }) => {
+    // The API runs on this machine's real clock (the browser clock is not involved).
+    const startNotInFuture = { startUtc: ['The start time must be later than the current time.'] };
+    const hour = 60 * 60 * 1000;
+    const inThePast = { startUtc: '2020-01-06T08:00:00.000Z', endUtc: '2020-01-06T09:00:00.000Z' };
+    const justStarted = new Date(Date.now() - 1000);
+
+    const past = await expectProblem(await api.postBooking({ ...validBooking, ...inThePast }), 400);
+    expect(past.errors).toEqual(startNotInFuture);
+
+    const started = await expectProblem(
+      await api.postBooking({
+        ...validBooking,
+        startUtc: justStarted.toISOString(),
+        endUtc: new Date(justStarted.getTime() + hour).toISOString(),
+      }),
+      400,
+    );
+    expect(started.errors).toEqual(startNotInFuture);
+    expect(await api.listBookings()).toEqual([]);
+
+    // An existing booking cannot be moved into the past, and stays as it was.
+    const booking = await api.createBooking(validBooking);
+    const moved = await expectProblem(await api.putBooking(booking.id, { ...validBooking, ...inThePast }), 400);
+    expect(moved.errors).toEqual(startNotInFuture);
+    expect(await (await api.getBooking(booking.id)).json()).toEqual(booking);
+  });
+
   test('POST /api/bookings rejects overlaps with 409 and allows back-to-back bookings', async ({ api }) => {
     await api.createBooking(validBooking);
 

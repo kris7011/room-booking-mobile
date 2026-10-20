@@ -6,7 +6,7 @@ import type { LoadState } from '../models/load-state';
 import type { MeetingRoom } from '../models/room';
 import { colors, spacing, typography } from '../theme/theme';
 import { formatRange } from '../utils/date-time';
-import { BookingForm } from './BookingForm';
+import { BookingForm, type BookingFormContext } from './BookingForm';
 import { RoomCard } from './RoomCard';
 import { StatusMessage } from './StatusMessage';
 
@@ -19,6 +19,7 @@ interface SearchResultsProps {
   onSelectRoom: (roomId: number | null) => void;
   onRetry: () => void;
   onBooked: (booking: BookingResponse) => void;
+  bookingForm: BookingFormContext;
 }
 
 export function SearchResults({
@@ -30,6 +31,7 @@ export function SearchResults({
   onSelectRoom,
   onRetry,
   onBooked,
+  bookingForm,
 }: SearchResultsProps) {
   switch (state.status) {
     case 'idle':
@@ -78,6 +80,7 @@ export function SearchResults({
                 />
                 {selected ? (
                   <BookingForm
+                    {...bookingForm}
                     room={room}
                     start={start}
                     end={end}
