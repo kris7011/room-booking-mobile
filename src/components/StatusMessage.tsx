@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { PrimaryButton } from './PrimaryButton';
 
-type Variant = 'loading' | 'error' | 'empty' | 'success';
+type Variant = 'loading' | 'error' | 'empty' | 'warning' | 'success';
 
 interface StatusMessageProps {
   variant: Variant;
@@ -17,10 +17,11 @@ const variantColors: Record<Variant, { background: string; text: string }> = {
   loading: { background: colors.surfaceMuted, text: colors.textMuted },
   error: { background: colors.dangerSoft, text: colors.danger },
   empty: { background: colors.warningSoft, text: colors.warning },
+  warning: { background: colors.warningSoft, text: colors.warning },
   success: { background: colors.successSoft, text: colors.success },
 };
 
-// One component for the loading, error, empty and success states so they look
+// One component for the loading, error, empty, warning and success states so they look
 // consistent everywhere.
 export function StatusMessage({ variant, title, message, actionLabel, onAction }: StatusMessageProps) {
   const palette = variantColors[variant];

@@ -1,5 +1,5 @@
-import { useState, type ComponentProps } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState, type ComponentPropsWithRef } from 'react';
+import { StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
 
 import { describeError } from '../api/error-messages';
 import { roomBookingApi } from '../api/room-booking-api';
@@ -7,6 +7,7 @@ import { MAX_BOOKED_BY_LENGTH, MAX_TITLE_LENGTH, type BookingResponse } from '..
 import type { MeetingRoom } from '../models/room';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { formatRange } from '../utils/date-time';
+import { useRevealFocusedInput } from './KeyboardAwareScrollView';
 import { PrimaryButton } from './PrimaryButton';
 import { StatusMessage } from './StatusMessage';
 
@@ -24,6 +25,7 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showValidation, setShowValidation] = useState(false);
+  const bookedByRef = useRef<TextInputInstance>(null);
 
   // Same rules as the API's BookingRequestValidator, checked before sending.
   const titleError = !title.trim() ? 'Skriv en titel på mødet.' : null;
@@ -68,8 +70,12 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
         error={showValidation ? titleError : null}
         autoCapitalize="sentences"
         returnKeyType="next"
+        // "Next" moves on to the name field and keeps the keyboard open.
+        submitBehavior="submit"
+        onSubmitEditing={() => bookedByRef.current?.focus()}
       />
       <LabeledInput
+        ref={bookedByRef}
         label="Booket af"
         value={bookedBy}
         onChangeText={setBookedBy}
@@ -96,20 +102,25 @@ export function BookingForm({ room, start, end, onBooked, onCancel }: BookingFor
   );
 }
 
-interface LabeledInputProps extends ComponentProps<typeof TextInput> {
+interface LabeledInputProps extends ComponentPropsWithRef<typeof TextInput> {
   label: string;
   error: string | null;
 }
 
 function LabeledInput({ label, error, style, ...inputProps }: LabeledInputProps) {
   const [focused, setFocused] = useState(false);
+  const revealFocusedInput = useRevealFocusedInput();
 
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         {...inputProps}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          setFocused(true);
+          // Switching fields while the keyboard is open (Android).
+          revealFocusedInput();
+        }}
         onBlur={() => setFocused(false)}
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={label}

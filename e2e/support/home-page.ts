@@ -18,6 +18,9 @@ export class HomePage {
   readonly confirmButton: Locator;
   readonly successMessage: Locator;
   readonly alert: Locator;
+  readonly startTime: Locator;
+  readonly endTime: Locator;
+  readonly passedWarning: Locator;
 
   constructor(readonly page: Page) {
     this.apiBanner = page.getByText(`API: ${API_URL}`, { exact: true });
@@ -29,6 +32,9 @@ export class HomePage {
     this.confirmButton = page.getByRole('button', { name: 'Bekræft booking' });
     this.successMessage = page.getByText('Booking oprettet', { exact: true }).locator('..');
     this.alert = page.getByRole('alert');
+    this.startTime = page.getByLabel(/^Start \d\d:\d\d$/);
+    this.endTime = page.getByLabel(/^Slut \d\d:\d\d$/);
+    this.passedWarning = page.getByText('Tidspunktet er passeret', { exact: true }).locator('..');
   }
 
   /** Opens the app and waits until it has asked the API for the room list. */
@@ -46,6 +52,53 @@ export class HomePage {
   /** A selectable room card in the search results. */
   resultCard(room: MeetingRoom): Locator {
     return this.page.getByRole('button', { name: `${room.name}, plads til ${room.capacity}`, exact: true });
+  }
+
+  /**
+   * The day chip `index` days after today (0 = "I dag"). With the clock at
+   * FIXED_NOW, index 0 is 4 March 2030.
+   */
+  dayChip(index: number): Locator {
+    return this.dayChipWithCaption(`${4 + index}. mar`);
+  }
+
+  /** The day chip with this date, e.g. "31. mar". */
+  dayChipWithCaption(caption: string): Locator {
+    return this.page.getByRole('button').filter({ has: this.page.getByText(caption, { exact: true }) });
+  }
+
+  /** Asserts the start and end time shown in the search form. */
+  async expectTimeRange(start: string, end: string): Promise<void> {
+    await expect(this.startTime).toHaveText(start);
+    await expect(this.endTime).toHaveText(end);
+  }
+
+  async moveStart(direction: 'earlier' | 'later'): Promise<void> {
+    const name = `Start 30 minutter ${direction === 'later' ? 'senere' : 'tidligere'}`;
+    await this.page.getByRole('button', { name, exact: true }).click();
+  }
+
+  /**
+   * Simulates the app going to the background or coming back. React Native
+   * Web's AppState follows the Page Visibility API.
+   */
+  async setVisibility(state: 'hidden' | 'visible'): Promise<void> {
+    await this.page.evaluate((visibility) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => visibility === 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, state);
+  }
+
+  /** Left and right edge of the horizontally scrolling day strip, in page pixels. */
+  async dayStripBounds(): Promise<{ left: number; right: number }> {
+    return this.dayChip(0).evaluate((chip) => {
+      let strip = chip.parentElement;
+      while (strip && strip.scrollWidth <= strip.clientWidth) strip = strip.parentElement;
+      if (!strip) throw new Error('No horizontally scrolling parent found for the day chips.');
+      const { left, right } = strip.getBoundingClientRect();
+      return { left, right };
+    });
   }
 
   async chooseParticipants(count: number): Promise<void> {

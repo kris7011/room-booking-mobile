@@ -2,10 +2,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MeetingRoom } from '../models/room';
 import { colors, radius, spacing, typography } from '../theme/theme';
+import { capacityLabel, roomFitLabel } from '../utils/room-fit';
 
 interface RoomCardProps {
   room: MeetingRoom;
-  /** When set, the card shows how well the room fits this many people. */
+  /** When set, the card says that the room fits this many people. */
   participants?: number;
   selected?: boolean;
   /** Without onPress the card is display-only. */
@@ -19,7 +20,9 @@ export function RoomCard({ room, participants, selected = false, onPress }: Room
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const spareSeats = participants !== undefined ? room.capacity - participants : undefined;
+  // A booking reserves the whole room, so the card says it fits the group
+  // rather than how many seats are left over.
+  const fit = participants !== undefined ? roomFitLabel(room.capacity, participants) : null;
 
   const content = (
     <View style={styles.row}>
@@ -30,12 +33,8 @@ export function RoomCard({ room, participants, selected = false, onPress }: Room
         <Text style={styles.name} numberOfLines={1}>
           {room.name}
         </Text>
-        <Text style={styles.capacity}>
-          Plads til {room.capacity} {room.capacity === 1 ? 'person' : 'personer'}
-        </Text>
-        {spareSeats !== undefined && spareSeats >= 0 ? (
-          <Text style={styles.fit}>{spareSeats === 0 ? 'Perfekt størrelse' : `${spareSeats} ledige pladser ekstra`}</Text>
-        ) : null}
+        <Text style={styles.capacity}>{capacityLabel(room.capacity)}</Text>
+        {fit ? <Text style={styles.fit}>{fit}</Text> : null}
       </View>
       {onPress ? <Text style={styles.action}>{selected ? 'Valgt ✓' : 'Vælg'}</Text> : null}
     </View>
