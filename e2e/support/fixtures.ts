@@ -5,16 +5,29 @@ import { API_URL } from './environment';
 import { HomePage } from './home-page';
 import { FIXED_NOW } from './test-data';
 
+interface Options {
+  /**
+   * 'frozen' (default): Date.now() always returns `startTime`.
+   * 'running': the clock starts at `startTime` and runs; the test can move it
+   * on with page.clock.fastForward() and friends, which also fires timers.
+   */
+  clockMode: 'frozen' | 'running';
+  startTime: Date;
+}
+
 interface Fixtures {
   /** Direct access to the E2E API, outside the browser. */
   api: BookingApi;
-  /** The app, opened in a browser whose clock is frozen at FIXED_NOW. */
+  /** The app, opened in a browser whose clock starts at `startTime`. */
   app: HomePage;
   /** Runs for every test: starts it with no bookings in the run's database. */
   emptyDatabase: void;
 }
 
-export const test = base.extend<Fixtures>({
+export const test = base.extend<Fixtures & Options>({
+  clockMode: ['frozen', { option: true }],
+  startTime: [FIXED_NOW, { option: true }],
+
   api: async ({ playwright }, use) => {
     const request = await playwright.request.newContext({ baseURL: API_URL });
     await use(new BookingApi(request));
@@ -31,9 +44,13 @@ export const test = base.extend<Fixtures>({
     { auto: true },
   ],
 
-  app: async ({ page }, use) => {
-    // Date.now() and new Date() return FIXED_NOW; timers keep running normally.
-    await page.clock.setFixedTime(FIXED_NOW);
+  app: async ({ page, clockMode, startTime }, use) => {
+    if (clockMode === 'frozen') {
+      // Date.now() and new Date() return startTime; timers keep running normally.
+      await page.clock.setFixedTime(startTime);
+    } else {
+      await page.clock.install({ time: startTime });
+    }
     await use(new HomePage(page));
   },
 });

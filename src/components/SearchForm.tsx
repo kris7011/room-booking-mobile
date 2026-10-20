@@ -1,11 +1,13 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import type { SearchCriteria } from '../models/search-criteria';
-import { colors, radius, spacing, typography } from '../theme/theme';
+import { colors, radius, spacing } from '../theme/theme';
+import type { StartedWindow } from '../utils/search-window';
 import { DaySelector } from './DaySelector';
 import { FormSection } from './FormSection';
 import { ParticipantPicker } from './ParticipantPicker';
 import { PrimaryButton } from './PrimaryButton';
+import { StatusMessage } from './StatusMessage';
 import { TimeRangePicker } from './TimeRangePicker';
 
 interface SearchFormProps {
@@ -14,7 +16,9 @@ interface SearchFormProps {
   onChange: (changes: Partial<SearchCriteria>) => void;
   onSearch: () => void;
   searching: boolean;
-  validationMessage: string | null;
+  /** Set when the chosen time has started; searching is blocked until it changes. */
+  started: StartedWindow | null;
+  onUseSuggestion: () => void;
 }
 
 function formatDuration(minutes: number): string {
@@ -24,7 +28,7 @@ function formatDuration(minutes: number): string {
   return rest === 0 ? `${hours} t` : `${hours} t ${rest} min`;
 }
 
-export function SearchForm({ criteria, today, onChange, onSearch, searching, validationMessage }: SearchFormProps) {
+export function SearchForm({ criteria, today, onChange, onSearch, searching, started, onUseSuggestion }: SearchFormProps) {
   return (
     <View style={styles.card}>
       <FormSection title="Antal deltagere">
@@ -43,13 +47,21 @@ export function SearchForm({ criteria, today, onChange, onSearch, searching, val
         />
       </FormSection>
 
-      {validationMessage ? <Text style={styles.validation}>{validationMessage}</Text> : null}
+      {started ? (
+        <StatusMessage
+          variant="warning"
+          title="Tidspunktet er passeret"
+          message={`${started.message} Vælg et senere tidspunkt, eller brug det næste mulige.`}
+          actionLabel={`Brug næste tidspunkt: ${started.suggestionLabel}`}
+          onAction={onUseSuggestion}
+        />
+      ) : null}
 
       <PrimaryButton
         label="Søg efter ledige lokaler"
         onPress={onSearch}
         loading={searching}
-        disabled={validationMessage !== null}
+        disabled={started !== null}
       />
     </View>
   );
@@ -64,5 +76,4 @@ const styles = StyleSheet.create({
     // boxShadow works on iOS, Android (New Architecture) and web alike.
     boxShadow: '0 4px 12px rgba(15, 23, 42, 0.06)',
   },
-  validation: { ...typography.body, color: colors.danger, textAlign: 'center' },
 });

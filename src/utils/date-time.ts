@@ -57,16 +57,30 @@ export function formatRange(start: Date, end: Date): string {
   return `${WEEKDAYS[start.getDay()]} ${shortDateLabel(start)}, ${formatTime(start)}–${formatTime(end)}`;
 }
 
-/** Next half-hour slot from now, or tomorrow 09:00 if today is over. */
-export function defaultSearchWindow(now: Date): { day: Date; startMinutes: number; endMinutes: number } {
+/** The default meeting length. */
+export const DEFAULT_DURATION_MINUTES = 60;
+/** Suggested start when nothing is left today or before opening hours. */
+export const MORNING_START = 9 * 60; // 09:00
+
+/**
+ * The next half-hour slot from now that fits a meeting of `durationMinutes`
+ * before closing time, or 09:00 (earlier for very long meetings) if today is
+ * over. Before opening hours it suggests 09:00 today.
+ */
+export function defaultSearchWindow(
+  now: Date,
+  durationMinutes: number = DEFAULT_DURATION_MINUTES,
+): { day: Date; startMinutes: number; endMinutes: number } {
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const nextSlot = Math.ceil((nowMinutes + 1) / SLOT_MINUTES) * SLOT_MINUTES;
+  const morningStart = Math.max(FIRST_SLOT, Math.min(MORNING_START, LAST_SLOT - durationMinutes));
+  const morning = { startMinutes: morningStart, endMinutes: morningStart + durationMinutes };
 
   if (nextSlot < FIRST_SLOT) {
-    return { day: startOfDay(now), startMinutes: 9 * 60, endMinutes: 10 * 60 };
+    return { day: startOfDay(now), ...morning };
   }
-  if (nextSlot + 60 > LAST_SLOT) {
-    return { day: addDays(startOfDay(now), 1), startMinutes: 9 * 60, endMinutes: 10 * 60 };
+  if (nextSlot + durationMinutes > LAST_SLOT) {
+    return { day: addDays(startOfDay(now), 1), ...morning };
   }
-  return { day: startOfDay(now), startMinutes: nextSlot, endMinutes: nextSlot + 60 };
+  return { day: startOfDay(now), startMinutes: nextSlot, endMinutes: nextSlot + durationMinutes };
 }

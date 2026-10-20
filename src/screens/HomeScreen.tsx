@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,22 +11,28 @@ import { SearchForm } from '../components/SearchForm';
 import { SearchResults } from '../components/SearchResults';
 import { StatusMessage } from '../components/StatusMessage';
 import { isDemoMode } from '../config/env';
+import { useClock } from '../hooks/useClock';
 import type { BookingResponse } from '../models/booking';
 import type { LoadState } from '../models/load-state';
 import type { MeetingRoom } from '../models/room';
-import type { SearchCriteria } from '../models/search-criteria';
+import type { SearchCriteria, SearchWindow } from '../models/search-criteria';
 import { colors, spacing, typography } from '../theme/theme';
-import { atMinutes, defaultSearchWindow, formatRange } from '../utils/date-time';
+import { atMinutes, formatRange } from '../utils/date-time';
+import { checkSearchWindow, hasStarted, resolveSearchWindow } from '../utils/search-window';
 
 const DEFAULT_PARTICIPANTS = 4;
 
 export function HomeScreen() {
-  // The lazy initializer runs once, so "today" stays stable across re-renders.
-  const [today] = useState(() => new Date());
-  const [criteria, setCriteria] = useState<SearchCriteria>(() => ({
-    ...defaultSearchWindow(today),
-    participants: DEFAULT_PARTICIPANTS,
-  }));
+  // Renewed every half hour, at midnight and when the app returns from the
+  // background, so the default time, "I dag"/"I morgen" and the validation
+  // below stay current while the app is left open.
+  const { now, refresh: refreshClock } = useClock();
+  const [participants, setParticipants] = useState(DEFAULT_PARTICIPANTS);
+  // null: follow the clock. Set as soon as the user picks a day or time, and
+  // never changed automatically after that.
+  const [chosenWindow, setChosenWindow] = useState<SearchWindow | null>(null);
+  const searchWindow = useMemo(() => resolveSearchWindow(chosenWindow, now), [chosenWindow, now]);
+  const criteria: SearchCriteria = { ...searchWindow, participants };
 
   const [allRooms, setAllRooms] = useState<LoadState<MeetingRoom[]>>({ status: 'idle' });
   const [search, setSearch] = useState<LoadState<MeetingRoom[]>>({ status: 'idle' });
@@ -53,9 +59,7 @@ export function HomeScreen() {
     void loadAllRooms();
   }, [loadAllRooms]);
 
-  const start = atMinutes(criteria.day, criteria.startMinutes);
-  const end = atMinutes(criteria.day, criteria.endMinutes);
-  const validationMessage = start.getTime() <= Date.now() ? 'Starttidspunktet er allerede passeret. Vælg et senere tidspunkt.' : null;
+  const started = checkSearchWindow(searchWindow, now);
 
   const runSearch = async (searchFor: SearchCriteria) => {
     const searchId = ++latestSearchId.current;
@@ -80,12 +84,19 @@ export function HomeScreen() {
   };
 
   const handleSearch = () => {
+    // The clock may lag behind if timers were delayed. Never search for a time
+    // that has started; show the current state instead.
+    if (hasStarted(searchWindow, new Date())) {
+      refreshClock();
+      return;
+    }
     setLastBooking(null);
     void runSearch(criteria);
   };
 
-  const handleCriteriaChange = (changes: Partial<SearchCriteria>) => {
-    setCriteria((current) => ({ ...current, ...changes }));
+  const handleCriteriaChange = ({ participants: nextParticipants, ...windowChanges }: Partial<SearchCriteria>) => {
+    if (nextParticipants !== undefined) setParticipants(nextParticipants);
+    if (Object.keys(windowChanges).length > 0) setChosenWindow({ ...searchWindow, ...windowChanges });
   };
 
   const handleBooked = (booking: BookingResponse) => {
@@ -115,11 +126,12 @@ export function HomeScreen() {
 
           <SearchForm
             criteria={criteria}
-            today={today}
+            today={now}
             onChange={handleCriteriaChange}
             onSearch={handleSearch}
             searching={search.status === 'loading'}
-            validationMessage={validationMessage}
+            started={started}
+            onUseSuggestion={() => started && setChosenWindow(started.suggestion)}
           />
 
           {lastBooking ? (
