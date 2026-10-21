@@ -16,5 +16,7 @@
   "include": ["src/**/*.ts", "tests/**/*.ts"],
   // Must be set here: otherwise the "exclude" inherited from tsconfig.json
   // (which leaves tests/ out of the app check) would drop every test.
-  "exclude": ["node_modules", ".test-build"]
+  // *.native.ts files call native Expo modules and only run on a phone; the
+  // app check (tsconfig.json) still type-checks them.
+  "exclude": ["node_modules", ".test-build", "src/**/*.native.ts"]
 }
