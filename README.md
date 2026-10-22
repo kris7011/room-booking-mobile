@@ -113,8 +113,9 @@ Phone                                   Microsoft Entra ID                  meet
   - refresh token expired or revoked (`invalid_grant`, `interaction_required`, for example after a password change or a Conditional Access policy) → signed out, session deleted, *Din Microsoft-session er udløbet. Log ind igen.*
   - offline or Microsoft unavailable → still signed in with a warning; the next request tries again
   - `401` from the API → one forced refresh and one retry, then a message
-- **Logout** forgets the tokens and deletes everything in SecureStore. A refresh or a login that finishes after logout is ignored and cannot bring the session back. The Microsoft session in the browser stays; the next login shows the account picker (`prompt=select_account`), so another account can be chosen.
-- **API calls:** `src/api/http-client.ts` gets the token from the one `AccessTokenProvider` (the `AuthController`) and adds `Authorization: Bearer …`. Nobody signed in → no header, as before. A token is only sent over HTTPS, or over HTTP to `localhost`, `10.0.2.2` or a private network address (the development setups); never in plain HTTP over the internet.
+- **Logout** forgets the tokens and deletes everything in SecureStore. A refresh or a login that finishes after logout is ignored and cannot bring the session back, and a token renewed while the logout happened (for example while SecureStore was still saving the rotated refresh token) is never handed to a request. `getAccessToken()` only returns a token of the session that is current when it returns. A failed delete is reported only while still signed out, never over a newer login. A request that had already been sent when the user logged out cannot be called back, but it is not retried with a renewed token after a 401. The Microsoft session in the browser stays; the next login shows the account picker (`prompt=select_account`), so another account can be chosen.
+- **API calls:** `src/api/http-client.ts` gets the token from the one `AccessTokenProvider` (the `AuthController`) and adds `Authorization: Bearer …`. Nobody signed in → no header, as before.
+- **Transport:** a release build sends tokens **over HTTPS only**. A development bundle (`__DEV__`) also sends them over HTTP to the device itself (`localhost`, `127.0.0.0/8`, `::1`) and to `10.0.2.2` (the emulator's alias for the PC), because that traffic never crosses a network; see [Testing login against the API on a physical phone](#testing-login-against-the-api-on-a-physical-phone). Plain HTTP to any other address, a private Wi-Fi address included, never gets a token: the request is sent without it and the token is not even renewed for it.
 - **Errors** (`src/auth/auth-errors.ts`): cancelled, access denied, consent missing, configuration errors (for example `AADSTS50011` redirect URI mismatch or `AADSTS7000218` when the redirect is registered as *Web*), state mismatch, expired session, network, timeout and storage errors each get a Danish message with the AADSTS code, never a token.
 
 ### Configuration
@@ -130,6 +131,28 @@ Set in `.env.local` (gitignored; restart Metro after changing it):
 These are identifiers, not secrets, and end up in the app bundle. Without them the app runs without login. Invalid values (a client ID that is not a GUID, a bare scope name, a scope of the app's own registration, `consumers`) switch login off and the panel says why.
 
 The API must have the token validation from [meeting-room-booking#9](https://github.com/kris7011/meeting-room-booking/pull/9) and `Entra__ApiClientId` set. Without it, the panel says *API'et understøtter endnu ikke login* (404) or *API'et er ikke sat op til Microsoft-login* (503). Booking still works.
+
+### Testing login against the API on a physical phone
+
+A bearer token is never sent over plain HTTP across a network, so the usual phone setup (`http://<PC's LAN IP>:5003` over Wi-Fi) works for searching and booking, but without the token. The panel then says the token is not sent. Use the USB cable instead, so the API stays on the PC's `localhost` and the token never travels over Wi-Fi:
+
+```powershell
+# 1. API on the PC with the Entra settings (meeting-room-booking, PR #9)
+$env:Entra__ApiClientId = "<Application (client) ID of the API registration>"
+dotnet run --project .\src\MeetingRoomBooking.Api\MeetingRoomBooking.Api.csproj --launch-profile http
+
+# 2. Phone on USB with USB debugging on: the phone's localhost:5003 becomes the PC's localhost:5003
+adb reverse tcp:5003 tcp:5003
+adb reverse --list          # shows: UsbFfs tcp:5003 tcp:5003 (or similar)
+
+# 3. .env.local in this repository
+#    EXPO_PUBLIC_API_URL=http://localhost:5003
+npm run android:dev-build   # or, with the build installed: npx expo start --dev-client
+```
+
+- Neither the PC's firewall nor `0.0.0.0` is needed: the API only listens on the PC's `localhost`.
+- `adb reverse` is lost when the cable is unplugged or the phone restarts; run it again.
+- Only a **development bundle** sends a token to `http://localhost` (or `http://10.0.2.2` in the emulator). A **release build sends tokens over HTTPS only**, and its Android manifest does not allow cleartext HTTP at all. To test a release build against the API, put the API behind HTTPS with a certificate the phone trusts.
 
 ### Manual steps in the Microsoft Entra admin center
 
@@ -153,7 +176,8 @@ For a release build, a second registration (or a second redirect URI) with the r
 | 1 | Tap **Log ind med Microsoft**, sign in | Custom Tab opens Microsoft's login, returns to the app via `roombookingdev://auth`; the panel shows name and e-mail |
 | 2 | First login in a tenant | The consent screen lists Room Booking API; after consent the login completes. With consent refused: *Microsoft afviste login…* |
 | 3 | Close the Custom Tab without signing in | *Login blev annulleret.*, no error |
-| 4 | Live mode with the API from PR #9 (`Entra__ApiClientId` set) | *Bekræftet af API'et som …*; the API log shows no 401 |
+| 4 | Live mode with the API from PR #9 over `adb reverse` (see [above](#testing-login-against-the-api-on-a-physical-phone)) | *Bekræftet af API'et som …*; the API log shows no 401 |
+| 4b | The same API over Wi-Fi (`http://<LAN IP>:5003`) | Search and booking work; the panel says the token is not sent over an insecure connection; the API log shows no `Authorization` header |
 | 5 | Close the app completely and start it again | Still signed in, without a new browser login |
 | 6 | Leave the app for more than an hour (or until the access token expires), then search | The search works; the token was renewed silently |
 | 7 | Flight mode, restart the app | Signed in with the warning *Kunne ikke få forbindelse til Microsoft…*; with the network back, the next search works |
@@ -264,8 +288,10 @@ Covered:
 - **ID token** (`id-token.test.ts`): base64url and UTF-8 (æøå), malformed tokens, audience, issuer for the token's own tenant, v1.0 issuer, required tenant, expiry with clock skew, missing `oid`.
 - **Token endpoint** (`token-client.test.ts`): the exact form for the code exchange (with `code_verifier`, without `client_secret`) and the refresh; AADSTS50011, AADSTS7000218, expired and revoked refresh tokens, MFA required, network failure, timeout, 503; missing access token, wrong token type, missing lifetime, API scope not granted.
 - **Session storage** (`session-storage.test.ts`): round trip, chunks below 2 KB, no leftover chunks, damaged or unknown data is deleted, unreadable and unwritable keystore.
-- **Login flow** (`auth-controller.test.ts`): restore at start (valid, expired, offline, unreadable), sign-in, cancel, redirect errors, state mismatch, ID token for another app, double tap, no refresh token, keystore failures; renewal 2 minutes before expiry, forced renewal, one shared refresh for parallel calls, rotation; expired session signs out and deletes, offline keeps the session; logout deletes everything, also while a refresh or login is still running. Every test checks that no token reaches the console, the state or the storage (except the refresh token).
-- **Tokens in API calls** (`http-client-auth.test.ts`): `Authorization` only when signed in, one retry after a forced refresh on 401, an expired session becomes a Danish `ApiError` without a request, HTTPS or local/private HTTP only, `GET /api/me` and how its failures are shown.
+- **Login flow** (`auth-controller.test.ts`): restore at start (valid, expired, offline, unreadable), sign-in, cancel, redirect errors, state mismatch, ID token for another app, double tap, no refresh token, keystore failures; renewal 2 minutes before expiry, forced renewal, one shared refresh for parallel calls, rotation; expired session signs out and deletes, offline keeps the session; logout deletes everything, also while a refresh or login is still running. **Races** with deterministic ordering (SecureStore operations are held half-way, no timers): logout while the rotated refresh token is being saved hands out no token, to one or several waiting callers; logout and a new login during that save hand out the new session's token, never the old one; a renewal failing after logout lets the request go ahead without a token; a late delete failure does not overwrite a newer login; logout while the session is read at start restores nothing. Every test checks that no token reaches the console, the state or the storage (except the refresh token).
+- **Tokens in API calls** (`http-client-auth.test.ts`): `Authorization` only when signed in, one retry after a forced refresh on 401, an expired session becomes a Danish `ApiError` without a request, `GET /api/me` and how its failures are shown; through the real `AuthController`, a request whose renewal overlaps a logout goes out without the old token, and so does the next one. Transport rules: HTTPS only in a release bundle, local HTTP in a development bundle, never HTTP across a network.
+- **Token transport against `http://localhost`** (`http-client-transport.test.ts`, the `adb reverse` setup): a development bundle sends the token; a release bundle, or one whose `__DEV__` is unknown, sends none and does not even ask for it, and the request still works.
+- **Android manifest** (`app-config.test.ts`): the main manifest does not enable cleartext HTTP, so release builds keep Android's default.
 - **Login availability** (`auth-availability.test.ts`): web, Expo Go, missing and invalid settings.
 
 Not covered yet: React components in isolation (this needs `jest-expo` and React Native Testing Library). The end-to-end tests cover them in the browser.
