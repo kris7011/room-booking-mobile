@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { classifyCurrentUserError, fetchCurrentUser, type ServerIdentity } from '../api/current-user';
 import { describeError } from '../api/error-messages';
+import { canSendBearerTokenToApi } from '../api/http-client';
 import type { AuthUser } from '../auth/id-token';
 import { isDemoMode } from '../config/env';
 
@@ -19,6 +20,11 @@ export function useServerIdentity(user: AuthUser | null): { identity: ServerIden
   useEffect(() => {
     if (isDemoMode || userKey === null) {
       setIdentity(null);
+      return;
+    }
+    // The token would not be sent, so the API could only answer 401.
+    if (!canSendBearerTokenToApi()) {
+      setIdentity({ status: 'insecure-transport' });
       return;
     }
     let current = true;

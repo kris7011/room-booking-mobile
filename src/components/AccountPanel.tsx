@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import type { ServerIdentity } from '../api/current-user';
 import { describeUnavailable } from '../auth/auth-availability';
 import { useAuth } from '../auth/AuthProvider';
-import { isDemoMode } from '../config/env';
+import { apiBaseUrl, isDemoMode } from '../config/env';
 import { useServerIdentity } from '../hooks/useServerIdentity';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { PrimaryButton } from './PrimaryButton';
@@ -93,6 +93,13 @@ function ServerIdentityLine({ identity, onRetry }: { identity: ServerIdentity | 
       return <Text style={styles.caption}>API'et understøtter endnu ikke login (/api/me mangler).</Text>;
     case 'not-configured':
       return <Text style={styles.caption}>API'et er ikke sat op til Microsoft-login.</Text>;
+    case 'insecure-transport':
+      return (
+        <Text style={[styles.caption, styles.warning]}>
+          Login-tokenet sendes ikke til {apiBaseUrl}, fordi forbindelsen ikke er sikker. Brug HTTPS, eller i udvikling
+          localhost via adb reverse (se README). Søgning og booking virker uden login.
+        </Text>
+      );
     case 'rejected':
     case 'error':
       return (

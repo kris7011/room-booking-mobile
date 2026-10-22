@@ -14,6 +14,8 @@ export type ServerIdentity =
   | { status: 'unsupported' }
   /** The API runs without Entra settings. */
   | { status: 'not-configured' }
+  /** The API address is not one a token may be sent to (see canSendBearerToken). */
+  | { status: 'insecure-transport' }
   /** The API rejected the token (401) or the user (403). */
   | { status: 'rejected'; message: string }
   | { status: 'error'; message: string };

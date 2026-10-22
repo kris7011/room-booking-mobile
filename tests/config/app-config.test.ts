@@ -108,6 +108,15 @@ test('Android manifest: MainActivity opens roombookingdev:// links from a browse
   assert.ok(schemes.includes('exp+room-booking-mobile'), `schemes: ${schemes.join(', ')}`);
 });
 
+test('Android manifest: release builds keep Android\'s default of no cleartext HTTP', () => {
+  // Expo turns cleartext on only in the debug manifests (for Metro). The
+  // main manifest must not, so a release build cannot send anything,
+  // tokens included, over plain HTTP.
+  const attributes = children(manifest, 'application')[0]?.$ ?? {};
+  assert.equal(attributes['android:usesCleartextTraffic'], undefined);
+  assert.equal(attributes['android:networkSecurityConfig'], undefined);
+});
+
 test('Android manifest: SecureStore data is excluded from Auto Backup', () => {
   const attributes = children(manifest, 'application')[0]?.$ ?? {};
   assert.equal(attributes['android:fullBackupContent'], '@xml/secure_store_backup_rules');

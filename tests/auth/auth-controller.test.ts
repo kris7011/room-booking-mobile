@@ -13,7 +13,7 @@ import { readIdTokenUser } from '../../src/auth/id-token';
 import { SESSION_META_KEY, loadSession, saveSession } from '../../src/auth/session-storage';
 import type { TokenSet } from '../../src/auth/token-client';
 import { NOW_MS, TEST_CLIENT_ID, TEST_OBJECT_ID, TEST_TENANT_ID, makeIdToken } from '../support/entra-fixtures';
-import { MemoryStore } from '../support/memory-store';
+import { MemoryStore, until } from '../support/memory-store';
 
 const HOUR = 60 * 60 * 1000;
 const storedUser = { name: 'Søren Ærø-Ågård', username: 'soren@contoso.example', tenantId: TEST_TENANT_ID, objectId: TEST_OBJECT_ID };
@@ -399,5 +399,124 @@ describe('signOut', () => {
     await fake.controller.signIn();
     assert.equal(fake.controller.getState().status, 'signed-in');
     assert.equal(await fake.controller.getAccessToken(), 'fake-access-2');
+  });
+});
+
+// Logout, login and renewal interleaved at the moments where the controller
+// is waiting for SecureStore or for Entra. The store's hold() stops an
+// operation half-way, so each test fixes the exact order of the steps.
+describe('races between logout, login and renewal', () => {
+  test('logout while the rotated refresh token is being saved: the renewal hands out no token', async () => {
+    const fake = await signedIn();
+    clock.now += HOUR;
+    const write = fake.store.hold('set');
+
+    const renewal = fake.controller.getAccessToken();
+    await until(() => fake.store.waiting.set > 0, 'the renewal is saving the rotated refresh token');
+    assert.equal(fake.refresh.mock.callCount(), 1);
+
+    const signingOut = fake.controller.signOut();
+    write.release();
+
+    assert.equal(await renewal, null, 'the token renewed before the logout must not be handed out');
+    await signingOut;
+    assert.equal(await fake.controller.getAccessToken(), null);
+    assert.equal(fake.controller.getState().status, 'signed-out');
+    assert.equal(fake.store.values.size, 0, 'the save finished before the clear, so nothing is left');
+  });
+
+  test('several requests waiting for that renewal all get no token', async () => {
+    const fake = await signedIn();
+    clock.now += HOUR;
+    const write = fake.store.hold('set');
+
+    const waiting = [fake.controller.getAccessToken(), fake.controller.getAccessToken({ forceRefresh: true })];
+    await until(() => fake.store.waiting.set > 0, 'the renewal is saving');
+    const signingOut = fake.controller.signOut();
+    write.release();
+
+    assert.deepEqual(await Promise.all(waiting), [null, null]);
+    await signingOut;
+  });
+
+  test('logout and a new login while the old renewal is saving: the old token is never handed out', async () => {
+    const fake = await signedIn();
+    clock.now += HOUR;
+    const write = fake.store.hold('set');
+
+    const renewal = fake.controller.getAccessToken();
+    await until(() => fake.store.waiting.set > 0, 'the old renewal is saving');
+    const signingOut = fake.controller.signOut();
+    const signingIn = fake.controller.signIn();
+    await until(() => fake.controller.getState().status === 'signed-in', 'the new login has finished');
+    write.release();
+
+    // The caller asked while the old session was current; it gets the new session's token.
+    assert.equal(await renewal, 'fake-access-2');
+    await Promise.all([signingOut, signingIn]);
+    assert.equal(await fake.controller.getAccessToken(), 'fake-access-2');
+    assert.deepEqual(fake.controller.getState(), { status: 'signed-in', user: storedUser });
+    assert.equal((await loadSession(fake.store))?.refreshToken, 'fake-refresh-2');
+  });
+
+  test('a renewal that fails after logout lets the request go ahead without a token instead of failing', async () => {
+    const pending = deferred<TokenSet>();
+    const fake = await signedIn(setup({ refresh: () => pending.promise }));
+    clock.now += HOUR;
+
+    const renewal = fake.controller.getAccessToken();
+    await fake.controller.signOut();
+    pending.reject(new AuthFlowError('network', 'offline'));
+
+    assert.equal(await renewal, null);
+    assert.equal(fake.controller.getState().status, 'signed-out');
+  });
+
+  test('a delete that fails after a new login does not overwrite the new login', async () => {
+    const fake = await signedIn();
+    const remove = fake.store.hold('delete');
+
+    const signingOut = fake.controller.signOut();
+    await until(() => fake.store.waiting.delete > 0, 'the logout is deleting the session');
+    const signingIn = fake.controller.signIn();
+    await until(() => fake.controller.getState().status === 'signed-in', 'the new login has finished');
+    remove.fail();
+    await Promise.all([signingOut, signingIn]);
+
+    assert.deepEqual(fake.controller.getState(), { status: 'signed-in', user: storedUser });
+    assert.equal(await fake.controller.getAccessToken(), 'fake-access-2');
+    // The new session's save waited for the clear, so it is what is stored now.
+    assert.equal((await loadSession(fake.store))?.refreshToken, 'fake-refresh-2');
+  });
+
+  test('a delete that fails while still signed out is reported', async () => {
+    const fake = await signedIn();
+    const remove = fake.store.hold('delete');
+
+    const signingOut = fake.controller.signOut();
+    await until(() => fake.store.waiting.delete > 0, 'the logout is deleting the session');
+    remove.fail();
+    await signingOut;
+
+    const state = fake.controller.getState();
+    assert.equal(state.status === 'signed-out' && state.notice?.kind, 'error');
+  });
+
+  test('logout while the stored session is being read at start: nothing is restored', async () => {
+    const store = new MemoryStore();
+    await saveSession(store, { refreshToken: 'fake-refresh-old', user: storedUser });
+    const fake = setup({ store });
+    const read = store.hold('get');
+
+    const starting = fake.controller.start();
+    await until(() => store.waiting.get > 0, 'the start is reading the session');
+    const signingOut = fake.controller.signOut();
+    read.release();
+    await Promise.all([starting, signingOut]);
+
+    assert.equal(fake.controller.getState().status, 'signed-out');
+    assert.equal(fake.refresh.mock.callCount(), 0);
+    assert.equal(await fake.controller.getAccessToken(), null);
+    assert.equal(store.values.size, 0);
   });
 });

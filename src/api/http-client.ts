@@ -1,3 +1,4 @@
+import { isDevelopmentBundle } from '../config/build';
 import { apiBaseUrl } from '../config/env';
 import type { ProblemDetails } from '../models/problem-details';
 
@@ -38,11 +39,20 @@ export function setAccessTokenProvider(provider: AccessTokenProvider | null): vo
 }
 
 /**
- * A bearer token may only travel over HTTPS, or over HTTP to this machine,
- * the Android emulator's host alias or a private network (the development
- * setups in .env.example). Anything else would expose it on the way.
+ * Where a bearer token may be sent:
+ *
+ * - Release bundle: only over HTTPS.
+ * - Development bundle: also over HTTP to the device itself (localhost,
+ *   127.0.0.0/8, ::1) and to 10.0.2.2, the Android emulator's alias for the
+ *   host PC. Neither leaves the device or the PC: on a physical phone,
+ *   `adb reverse tcp:5003 tcp:5003` carries localhost:5003 over the USB
+ *   cable to the PC's localhost (see README, "Testing login against the API
+ *   on a physical phone").
+ *
+ * Never over plain HTTP to any other address, not even a private Wi-Fi
+ * address: anyone on that network could read and replay the token.
  */
-export function canSendBearerToken(url: string): boolean {
+export function canSendBearerToken(url: string, { development }: { development: boolean }): boolean {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -50,14 +60,15 @@ export function canSendBearerToken(url: string): boolean {
     return false;
   }
   if (parsed.protocol === 'https:') return true;
-  if (parsed.protocol !== 'http:') return false;
+  if (parsed.protocol !== 'http:' || !development) return false;
 
   const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (host === 'localhost' || host === '::1' || host.endsWith('.local')) return true;
-  const octets = host.split('.');
-  if (octets.length !== 4 || octets.some((octet) => !/^\d{1,3}$/.test(octet) || Number(octet) > 255)) return false;
-  const [a, b] = octets.map(Number);
-  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+  return host === 'localhost' || host === '::1' || host === '10.0.2.2' || /^127(\.\d{1,3}){3}$/.test(host);
+}
+
+/** Whether requests to the configured API can carry the signed-in user's token. */
+export function canSendBearerTokenToApi(): boolean {
+  return apiBaseUrl !== null && canSendBearerToken(`${apiBaseUrl}/`, { development: isDevelopmentBundle() });
 }
 
 type QueryValue = string | number | undefined;
@@ -83,7 +94,9 @@ export function buildUrl(path: string, query?: Record<string, QueryValue>): stri
 
 export async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = buildUrl(path, options.query);
-  const provider = canSendBearerToken(url) ? accessTokenProvider : null;
+  // Over an insecure connection the token is not even requested: the request
+  // goes out exactly as without login.
+  const provider = canSendBearerToken(url, { development: isDevelopmentBundle() }) ? accessTokenProvider : null;
 
   let accessToken = provider ? await getAccessToken(provider, false) : null;
   let response = await send(url, options, accessToken);

@@ -56,14 +56,17 @@ export class AuthController {
   private state: AuthState;
   private readonly listeners = new Set<Listener>();
   private session: LiveSession | null = null;
-  private refreshInFlight: Promise<string | null> | null = null;
+  /** The running renewal and the session generation it belongs to. */
+  private refreshInFlight: { generation: number; promise: Promise<string | null> } | null = null;
   private started = false;
   /**
    * Bumped by every sign-in and sign-out. Async work started under an older
    * generation must not change the session or the storage when it finishes.
    */
   private generation = 0;
-  /** Storage writes run one after another, in the order they were requested. */
+  /** The generation whose session a renewal found expired or revoked. */
+  private expiredGeneration = -1;
+  /** SecureStore reads and writes run one after another, in the order they were requested. */
   private storageQueue: Promise<void> = Promise.resolve();
 
   private constructor(
@@ -96,7 +99,9 @@ export class AuthController {
 
     let stored;
     try {
-      stored = await loadSession(this.deps.store);
+      // Through the queue, so a logout's delete can never run while this reads.
+      const store = this.deps.store;
+      stored = await this.enqueueStorage(() => loadSession(store));
     } catch (error) {
       if (generation === this.generation) this.setState({ status: 'signed-out', notice: errorNotice(error) });
       return;
@@ -161,13 +166,16 @@ export class AuthController {
    */
   async signOut(): Promise<void> {
     if (!this.deps) return;
-    ++this.generation;
+    const generation = ++this.generation;
     this.session = null;
     this.refreshInFlight = null;
     this.setState({ status: 'signed-out', notice: { kind: 'info', message: 'Du er logget ud.' } });
     try {
       await this.enqueueStorage(() => clearSession(this.requireDeps().store));
     } catch {
+      // Only while still signed out: a login that finished in the meantime
+      // must not be replaced by this logout's late failure.
+      if (generation !== this.generation) return;
       this.setState({
         status: 'signed-out',
         notice: { kind: 'error', message: 'Du er logget ud, men den gemte session kunne ikke slettes fra enheden.' },
@@ -181,27 +189,53 @@ export class AuthController {
    * renewal. Throws AuthFlowError when a signed-in user's token cannot be
    * renewed (offline, or the session has expired and the user is now
    * signed out).
+   *
+   * The token returned always belongs to the session that is current when
+   * this method returns: if the user signs out (or out and in again) while
+   * a renewal is running, its result is thrown away and the current state
+   * decides (no token, or the new session's).
    */
   async getAccessToken(options: { forceRefresh?: boolean } = {}): Promise<string | null> {
-    const session = this.session;
-    if (!this.deps || !session) return null;
+    if (!this.deps) return null;
+    let forceRefresh = options.forceRefresh === true;
 
-    const now = this.now();
-    if (!options.forceRefresh && session.accessToken && session.accessTokenExpiresAt - now > ACCESS_TOKEN_RENEWAL_MARGIN_MS) {
-      return session.accessToken;
+    // A few rounds at most, in case logins and logouts keep overtaking the renewal.
+    for (let round = 0; round < 3; round++) {
+      const session = this.session;
+      if (!session) return null;
+      const generation = this.generation;
+
+      if (!forceRefresh && session.accessToken && session.accessTokenExpiresAt - this.now() > ACCESS_TOKEN_RENEWAL_MARGIN_MS) {
+        return session.accessToken;
+      }
+
+      try {
+        const accessToken = await this.renewal(generation, session);
+        if (generation === this.generation) return accessToken;
+      } catch (error) {
+        // The renewal itself ended this session (expired or revoked): the
+        // caller learns why. A logout or login from elsewhere: look again.
+        if (generation === this.generation || generation === this.expiredGeneration) throw error;
+      }
+      // Another session now. A forced renewal was meant for the old token.
+      forceRefresh = false;
     }
-    if (!this.refreshInFlight) {
-      const renewal = this.renew(session).finally(() => {
-        if (this.refreshInFlight === renewal) this.refreshInFlight = null;
-      });
-      this.refreshInFlight = renewal;
-    }
-    return this.refreshInFlight;
+    return null;
   }
 
-  private async renew(session: LiveSession): Promise<string | null> {
+  /** The running renewal of this session, or a new one. Never shared across sessions. */
+  private renewal(generation: number, session: LiveSession): Promise<string | null> {
+    if (this.refreshInFlight?.generation !== generation) {
+      const promise: Promise<string | null> = this.renew(generation, session).finally(() => {
+        if (this.refreshInFlight?.promise === promise) this.refreshInFlight = null;
+      });
+      this.refreshInFlight = { generation, promise };
+    }
+    return this.refreshInFlight.promise;
+  }
+
+  private async renew(generation: number, session: LiveSession): Promise<string | null> {
     const deps = this.requireDeps();
-    const generation = this.generation;
 
     if (!session.refreshToken) {
       this.expire(generation);
@@ -234,7 +268,10 @@ export class AuthController {
     // Entra rotates refresh tokens; keep the newest so the next app start works.
     if (refreshToken !== session.refreshToken || user !== session.user) {
       const warning = await this.persist(generation, { refreshToken, user });
-      if (warning && generation === this.generation) this.setState({ status: 'signed-in', user, warning });
+      // Signed out while saving (SecureStore is asynchronous): this token
+      // belongs to an ended session and must not reach a request.
+      if (generation !== this.generation) return null;
+      if (warning) this.setState({ status: 'signed-in', user, warning });
     }
     return tokens.accessToken;
   }
@@ -242,6 +279,7 @@ export class AuthController {
   /** The session can no longer be renewed: sign out and delete it. */
   private expire(generation: number, error?: unknown): void {
     if (generation !== this.generation) return;
+    this.expiredGeneration = generation;
     ++this.generation;
     this.session = null;
     this.setState({
@@ -263,9 +301,13 @@ export class AuthController {
     }
   }
 
-  private enqueueStorage(operation: () => Promise<void>): Promise<void> {
+  /** Reads and writes of SecureStore run one after another, in the order they were requested. */
+  private enqueueStorage<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.storageQueue.then(operation);
-    this.storageQueue = result.catch(() => undefined);
+    this.storageQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
     return result;
   }
 
