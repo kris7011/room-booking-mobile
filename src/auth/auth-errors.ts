@@ -134,7 +134,7 @@ export function describeAuthError(error: unknown): string {
     case 'consent-required':
       return (
         `Appen har ikke fået tilladelse til at bruge Room Booking-API'et${code}. ` +
-        'En administrator i din organisation skal muligvis give samtykke.'
+        'Giv samtykke, når Microsoft spørger. Med en arbejds- eller skolekonto skal en administrator i din organisation muligvis give samtykke.'
       );
     case 'configuration':
       return (

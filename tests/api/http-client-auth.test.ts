@@ -16,7 +16,7 @@ import { liveApi } from '../../src/api/live-api';
 import { AuthController, type AuthControllerDeps } from '../../src/auth/auth-controller';
 import { AuthFlowError } from '../../src/auth/auth-errors';
 import { readIdTokenUser } from '../../src/auth/id-token';
-import { NOW_MS, TEST_CLIENT_ID, makeIdToken } from '../support/entra-fixtures';
+import { NOW_MS, PERSONAL_OBJECT_ID, PERSONAL_TENANT_ID, TEST_CLIENT_ID, makeIdToken } from '../support/entra-fixtures';
 import { MemoryStore, until } from '../support/memory-store';
 
 afterEach(() => {
@@ -209,7 +209,7 @@ describe('a request never changes identity while it waits for its token', () => 
 
   /** Each login is the next user in `users`; tokens are named after the user. */
   function controllerFor(
-    users: { oid: string; name: string }[],
+    users: { oid: string; name: string; tid?: string; username?: string }[],
     store: MemoryStore,
     clock: { now: number },
     refresh?: AuthControllerDeps['refresh'],
@@ -225,7 +225,12 @@ describe('a request never changes identity while it waits for its token', () => 
           accessToken: `fake-access-${user.name}`,
           accessTokenExpiresAt: clock.now + HOUR,
           refreshToken: `fake-refresh-${user.name}`,
-          idToken: makeIdToken({ oid: user.oid, name: user.name }),
+          idToken: makeIdToken({
+            oid: user.oid,
+            name: user.name,
+            ...(user.tid ? { tid: user.tid, iss: `https://login.microsoftonline.com/${user.tid}/v2.0` } : {}),
+            ...(user.username ? { preferred_username: user.username } : {}),
+          }),
         };
       },
       refresh:
@@ -317,6 +322,45 @@ describe('a request never changes identity while it waits for its token', () => 
     // Bo's own booking carries Bo's token.
     await liveApi.createBooking({ ...booking, bookedBy: 'Bo' });
     assert.equal(headersOf(fetchMock).Authorization, 'Bearer fake-access-Bo');
+  });
+
+  test('a work account switching to a personal account with the same e-mail is a different session', async () => {
+    // Same address, both kinds of Microsoft account: only tid/oid tell them apart.
+    const work = { ...USER_A, username: 'anna@outlook.example' };
+    const personal = {
+      oid: PERSONAL_OBJECT_ID,
+      name: 'Anna privat',
+      tid: PERSONAL_TENANT_ID,
+      username: 'anna@outlook.example',
+    };
+    const clock = { now: NOW_MS };
+    const store = new MemoryStore();
+    const controller = controllerFor([work, personal], store, clock);
+    await controller.start();
+    await controller.signIn();
+    setAccessTokenProvider(controller);
+    const fetchMock = stubFetch([201], { id: 1 });
+
+    clock.now += HOUR;
+    const write = store.hold('set');
+    const pending = liveApi.createBooking(booking);
+    await until(() => store.waiting.set > 0, "the work account's renewal is saving");
+    const signingOut = controller.signOut();
+    const signingIn = controller.signIn();
+    await until(() => controller.getState().status === 'signed-in', 'the personal account has signed in');
+    const state = controller.getState();
+    assert.ok(state.status === 'signed-in');
+    assert.equal(state.user.tenantId, PERSONAL_TENANT_ID);
+    assert.equal(state.user.objectId, PERSONAL_OBJECT_ID);
+    assert.equal(state.user.username, work.username, 'the same e-mail, yet another identity');
+    write.release();
+
+    await rejectsAsSessionChanged(pending);
+    await Promise.all([signingOut, signingIn]);
+    assert.equal(fetchMock.mock.callCount(), 0, 'not sent as the work account, nor as the personal one');
+
+    await liveApi.createBooking(booking);
+    assert.equal(headersOf(fetchMock).Authorization, 'Bearer fake-access-Anna privat');
   });
 
   test('a renewal that fails after logout aborts the request instead of sending it anonymously', async () => {

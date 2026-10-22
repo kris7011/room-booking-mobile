@@ -6,6 +6,8 @@ import { decodeBase64UrlUtf8, decodeJwtPayload, readIdTokenUser, type IdTokenExp
 import {
   NOW_MS,
   OTHER_TENANT_ID,
+  PERSONAL_OBJECT_ID,
+  PERSONAL_TENANT_ID,
   TEST_CLIENT_ID,
   TEST_OBJECT_ID,
   TEST_TENANT_ID,
@@ -67,6 +69,42 @@ describe('readIdTokenUser', () => {
     rejects(makeIdToken({ iss: `https://login.microsoftonline.com/${OTHER_TENANT_ID}/v2.0` }), /issuer/);
     rejects(makeIdToken({ iss: `https://sts.windows.net/${TEST_TENANT_ID}/` }), /issuer/);
     rejects(makeIdToken({ tid: 'organizations' }), /tenant/);
+  });
+
+  test('a personal Microsoft account (Outlook.com, Hotmail, Live.com) is read like any tenant', () => {
+    const personal = makeIdToken({
+      iss: `https://login.microsoftonline.com/${PERSONAL_TENANT_ID}/v2.0`,
+      tid: PERSONAL_TENANT_ID,
+      oid: PERSONAL_OBJECT_ID,
+      preferred_username: 'soren@outlook.example',
+    });
+    assert.deepEqual(readIdTokenUser(personal, expected), {
+      name: 'Søren Ærø-Ågård',
+      username: 'soren@outlook.example',
+      tenantId: PERSONAL_TENANT_ID,
+      objectId: PERSONAL_OBJECT_ID,
+    });
+  });
+
+  test('a personal account must carry the consumer tenant\'s own issuer', () => {
+    // A work tenant's issuer, the "consumers" alias or a v1.0 issuer never pass.
+    for (const iss of [
+      `https://login.microsoftonline.com/${TEST_TENANT_ID}/v2.0`,
+      'https://login.microsoftonline.com/consumers/v2.0',
+      `https://sts.windows.net/${PERSONAL_TENANT_ID}/`,
+    ]) {
+      rejects(makeIdToken({ iss, tid: PERSONAL_TENANT_ID, oid: PERSONAL_OBJECT_ID }), /issuer/);
+    }
+    rejects(makeIdToken({ iss: `https://login.microsoftonline.com/${PERSONAL_TENANT_ID}/v2.0` }), /issuer/);
+  });
+
+  test('a required work tenant rejects personal accounts', () => {
+    const personal = makeIdToken({
+      iss: `https://login.microsoftonline.com/${PERSONAL_TENANT_ID}/v2.0`,
+      tid: PERSONAL_TENANT_ID,
+      oid: PERSONAL_OBJECT_ID,
+    });
+    rejects(personal, /another tenant/, { ...expected, requiredTenantId: TEST_TENANT_ID });
   });
 
   test('a required tenant rejects users of other tenants', () => {

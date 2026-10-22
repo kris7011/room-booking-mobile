@@ -3,8 +3,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, test } from 'node:test';
 
-import { expectedIssuer, isGuid, resolveEntraConfig } from '../../src/auth/entra-config';
-import { TEST_API_SCOPE, TEST_CLIENT_ID, TEST_TENANT_ID } from '../support/entra-fixtures';
+import {
+  PERSONAL_ACCOUNTS_TENANT_ID,
+  expectedIssuer,
+  isGuid,
+  isPersonalAccountTenant,
+  resolveEntraConfig,
+} from '../../src/auth/entra-config';
+import { PERSONAL_TENANT_ID, TEST_API_SCOPE, TEST_CLIENT_ID, TEST_TENANT_ID } from '../support/entra-fixtures';
 
 const projectRoot = resolve(__dirname, '..', '..', '..');
 
@@ -20,18 +26,32 @@ describe('resolveEntraConfig', () => {
     assert.deepEqual(resolveEntraConfig({ clientId: '  ', apiScope: '' }), { configured: false, problem: null });
   });
 
-  test('a client ID and an API scope → the organizations endpoints and the four scopes', () => {
+  test('a client ID and an API scope → the common endpoints (personal, work and school accounts) and the four scopes', () => {
     const result = resolveEntraConfig({ clientId: ` ${TEST_CLIENT_ID} `, apiScope: TEST_API_SCOPE });
     assert.ok(result.configured);
     assert.deepEqual(result.config, {
       clientId: TEST_CLIENT_ID,
       apiScope: TEST_API_SCOPE,
-      tenant: 'organizations',
-      authorizationEndpoint: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize',
-      tokenEndpoint: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+      tenant: 'common',
+      authorizationEndpoint: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+      tokenEndpoint: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
       scopes: ['openid', 'profile', 'offline_access', TEST_API_SCOPE],
       requiredTenantId: null,
     });
+  });
+
+  test('a blank tenant falls back to common', () => {
+    const result = resolveEntraConfig({ clientId: TEST_CLIENT_ID, apiScope: TEST_API_SCOPE, tenant: '  ' });
+    assert.ok(result.configured);
+    assert.equal(result.config.tenant, 'common');
+  });
+
+  test('"organizations" limits login to work and school accounts', () => {
+    const result = resolveEntraConfig({ clientId: TEST_CLIENT_ID, apiScope: TEST_API_SCOPE, tenant: 'organizations' });
+    assert.ok(result.configured);
+    assert.equal(result.config.authorizationEndpoint, 'https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize');
+    assert.equal(result.config.tokenEndpoint, 'https://login.microsoftonline.com/organizations/oauth2/v2.0/token');
+    assert.equal(result.config.requiredTenantId, null);
   });
 
   test('a tenant ID limits login to that tenant', () => {
@@ -77,6 +97,14 @@ test('expectedIssuer is the v2.0 issuer of the user\'s tenant', () => {
   assert.equal(expectedIssuer(TEST_TENANT_ID), `https://login.microsoftonline.com/${TEST_TENANT_ID}/v2.0`);
   assert.ok(isGuid(TEST_TENANT_ID));
   assert.ok(!isGuid('organizations'));
+});
+
+test('personal accounts are recognised by the consumer tenant ID', () => {
+  assert.equal(PERSONAL_ACCOUNTS_TENANT_ID, PERSONAL_TENANT_ID);
+  assert.ok(isPersonalAccountTenant(PERSONAL_TENANT_ID));
+  assert.ok(isPersonalAccountTenant(PERSONAL_TENANT_ID.toUpperCase()));
+  assert.ok(!isPersonalAccountTenant(TEST_TENANT_ID));
+  assert.ok(!isPersonalAccountTenant('consumers'));
 });
 
 describe('no secrets in the app', () => {

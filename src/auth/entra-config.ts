@@ -13,6 +13,18 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const ENTRA_INSTANCE = 'https://login.microsoftonline.com';
 
+/**
+ * "common" signs in both personal Microsoft accounts (Outlook.com, Hotmail,
+ * Live.com) and work or school accounts of any tenant.
+ */
+export const DEFAULT_ENTRA_TENANT = 'common';
+
+/**
+ * The tenant personal Microsoft accounts sign in through: their tokens carry
+ * it as `tid` and in `iss`, like any other tenant.
+ */
+export const PERSONAL_ACCOUNTS_TENANT_ID = '9188040d-6c67-4c5b-b112-36a304b66dad';
+
 /** The values as they come from the environment, before any validation. */
 export interface RawEntraSettings {
   clientId?: string;
@@ -25,7 +37,7 @@ export interface EntraConfig {
   clientId: string;
   /** Delegated scope of the API registration, e.g. api://<api-id>/access_as_user. */
   apiScope: string;
-  /** A tenant ID, a verified domain, "organizations" or "common". */
+  /** "common" (the default), "organizations", a tenant ID or a verified domain. */
   tenant: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
@@ -46,7 +58,7 @@ export type EntraConfigResult =
 export function resolveEntraConfig(raw: RawEntraSettings): EntraConfigResult {
   const clientId = raw.clientId?.trim() ?? '';
   const apiScope = raw.apiScope?.trim() ?? '';
-  const tenant = raw.tenant?.trim() || 'organizations';
+  const tenant = raw.tenant?.trim() || DEFAULT_ENTRA_TENANT;
 
   if (!clientId && !apiScope) return { configured: false, problem: null };
   if (!clientId) return { configured: false, problem: 'EXPO_PUBLIC_ENTRA_CLIENT_ID mangler.' };
@@ -62,12 +74,12 @@ export function resolveEntraConfig(raw: RawEntraSettings): EntraConfigResult {
   if (scopeProblem) return { configured: false, problem: scopeProblem };
 
   // The tenant ends up in a URL, so it must be one plain path segment.
-  // "consumers" (personal Microsoft accounts only) cannot get a token for a
-  // work or school API.
+  // "consumers" (personal accounts only) would shut out every work and
+  // school account; "common" already includes personal accounts.
   if (!/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(tenant) || tenant.toLowerCase() === 'consumers') {
     return {
       configured: false,
-      problem: 'EXPO_PUBLIC_ENTRA_TENANT skal være et tenant-ID, et domæne, "organizations" eller "common".',
+      problem: 'EXPO_PUBLIC_ENTRA_TENANT skal være "common", "organizations", et tenant-ID eller et domæne.',
     };
   }
 
@@ -109,11 +121,11 @@ const resolved = entraConfigResult.configured ? entraConfigResult.config : null;
 
 export const ENTRA_CLIENT_ID = resolved?.clientId ?? '';
 export const ENTRA_API_SCOPE = resolved?.apiScope ?? '';
-export const ENTRA_TENANT = resolved?.tenant ?? 'organizations';
+export const ENTRA_TENANT = resolved?.tenant ?? DEFAULT_ENTRA_TENANT;
 /**
- * Base URL of the Entra endpoints. Not the `iss` of a token: with
- * "organizations" that is https://login.microsoftonline.com/<the user's
- * tenant ID>/v2.0, see expectedIssuer().
+ * Base URL of the Entra endpoints. Not the `iss` of a token: with "common"
+ * that is https://login.microsoftonline.com/<the user's tenant ID>/v2.0
+ * (PERSONAL_ACCOUNTS_TENANT_ID for a personal account), see expectedIssuer().
  */
 export const ENTRA_AUTHORITY = `${ENTRA_INSTANCE}/${ENTRA_TENANT}/v2.0`;
 export const ENTRA_SCOPES: readonly string[] = resolved?.scopes ?? [];
@@ -131,4 +143,9 @@ export function isGuid(value: unknown): value is string {
 /** The `iss` Entra puts in a v2.0 token for a user of `tenantId`. */
 export function expectedIssuer(tenantId: string): string {
   return `${ENTRA_INSTANCE}/${tenantId}/v2.0`;
+}
+
+/** Whether a user of `tenantId` signed in with a personal Microsoft account. */
+export function isPersonalAccountTenant(tenantId: string): boolean {
+  return tenantId.toLowerCase() === PERSONAL_ACCOUNTS_TENANT_ID;
 }

@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import type { ServerIdentity } from '../api/current-user';
 import { describeUnavailable } from '../auth/auth-availability';
 import { useAuth } from '../auth/AuthProvider';
+import { isPersonalAccountTenant } from '../auth/entra-config';
 import { apiBaseUrl, isDemoMode } from '../config/env';
 import { useServerIdentity } from '../hooks/useServerIdentity';
 import { colors, radius, spacing, typography } from '../theme/theme';
@@ -34,7 +35,11 @@ export function AccountPanel() {
   if (state.status === 'signed-in') {
     return (
       <View style={styles.panel} testID="account-panel">
-        <Text style={styles.label}>Logget ind med Microsoft</Text>
+        <Text style={styles.label}>
+          {isPersonalAccountTenant(state.user.tenantId)
+            ? 'Logget ind med en personlig Microsoft-konto'
+            : 'Logget ind med en Microsoft arbejds- eller skolekonto'}
+        </Text>
         <Text style={styles.name}>{state.user.name}</Text>
         {state.user.username ? <Text style={styles.caption}>{state.user.username}</Text> : null}
         <ServerIdentityLine identity={identity} onRetry={recheck} />

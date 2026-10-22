@@ -17,7 +17,10 @@ const CLOCK_SKEW_MS = 5 * 60 * 1000;
 export interface AuthUser {
   /** The `name` claim, e.g. "Kris Larsen". */
   name: string;
-  /** The `preferred_username` claim, usually the work e-mail. Display only, never a key. */
+  /**
+   * The `preferred_username` claim, usually an e-mail address. Mutable, and a
+   * personal and a work account can share it: display only, never a key.
+   */
   username: string | null;
   /** Entra tenant (`tid`) and object ID (`oid`): the user's stable identity. */
   tenantId: string;

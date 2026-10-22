@@ -7,8 +7,12 @@ export const TEST_API_SCOPE = `api://${TEST_API_CLIENT_ID}/access_as_user`;
 export const TEST_TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 export const OTHER_TENANT_ID = 'ffffffff-0000-4111-8222-333333333333';
 export const TEST_OBJECT_ID = '12345678-90ab-4cde-8f01-234567890abc';
+/** Microsoft's real consumer tenant, written out so a typo in the app's constant fails the tests. */
+export const PERSONAL_TENANT_ID = '9188040d-6c67-4c5b-b112-36a304b66dad';
+/** Personal accounts get object IDs of this shape. */
+export const PERSONAL_OBJECT_ID = '00000000-0000-0000-4d2a-7b3c9e1f5a60';
 export const TEST_REDIRECT_URI = 'roombookingdev://auth';
-export const TEST_TOKEN_ENDPOINT = 'https://login.microsoftonline.com/organizations/oauth2/v2.0/token';
+export const TEST_TOKEN_ENDPOINT = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 
 /** A fixed "now" for the tests: 1 March 2031, 10:00 UTC. */
 export const NOW_MS = Date.UTC(2031, 2, 1, 10, 0, 0);

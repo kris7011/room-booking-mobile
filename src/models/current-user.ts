@@ -4,7 +4,7 @@
 // validated its signature, issuer, audience and scope.
 export interface CurrentUserResponse {
   displayName: string;
-  /** preferred_username, usually the work e-mail. Display only. */
+  /** preferred_username, usually an e-mail address. Display only, never a key. */
   username: string | null;
   tenantId: string;
   /** The API's own user record, or null when this identity is not linked to one yet. */
