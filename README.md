@@ -310,7 +310,7 @@ For the later Entra setup:
 
 ### Preparing Windows (PowerShell)
 
-Expo SDK 58 builds Android with Gradle 9.4.1, **JDK 17**, `compileSdk` 37, `targetSdk` 36, Build-Tools 37.0.0 and NDK 27.1.12297006. Android SDK Platform 36 is installed for the emulator image and `targetSdk`; Platform 37 is needed to compile. Run the steps in a new PowerShell window (no administrator rights needed unless `winget` asks).
+Expo SDK 58 builds Android with Gradle 9.4.1, **JDK 17**, `compileSdk` 37, `targetSdk` 36, Build-Tools 37.0.0, NDK 27.1.12297006 and CMake **3.31.6**. On Windows, keep the project in a short path (for example `C:\rb`) to avoid native Ninja path-length errors. Android SDK Platform 36 is installed for the emulator image and `targetSdk`; Platform 37 is needed to compile. Run the steps in a new PowerShell window (no administrator rights needed unless `winget` asks).
 
 1. **JDK 17** (Microsoft Build of OpenJDK) and `JAVA_HOME`:
 
@@ -345,11 +345,11 @@ Expo SDK 58 builds Android with Gradle 9.4.1, **JDK 17**, `compileSdk` 37, `targ
    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
    ```
 
-4. **SDK packages**: Platform 36 and 37, ADB (`platform-tools`), Build-Tools, NDK, CMake and an emulator image:
+4. **SDK packages**: Platform 36 and 37.0, ADB (`platform-tools`), Build-Tools, NDK, CMake and an emulator image. CMake 3.31.6 is required by `expo-build-properties` to work around Windows Ninja path-length failures:
 
    ```powershell
    sdkmanager --licenses   # answer y to each license
-   sdkmanager "platform-tools" "platforms;android-36" "platforms;android-37" "build-tools;37.0.0" "ndk;27.1.12297006" "cmake;3.22.1" "emulator" "system-images;android-36;google_apis;x86_64"
+   sdkmanager --channel=3 "platform-tools" "platforms;android-36" "platforms;android-37.0" "build-tools;37.0.0" "ndk;27.1.12297006" "cmake;3.31.6" "emulator" "system-images;android-36;google_apis;x86_64"
    ```
 
 5. **Emulator** (or connect a phone with USB debugging on instead). On Windows 11 Home, the emulator needs the *Windows Hypervisor Platform* feature (*Turn Windows features on or off*).
@@ -374,7 +374,8 @@ Expo SDK 58 builds Android with Gradle 9.4.1, **JDK 17**, `compileSdk` 37, `targ
 ### Building and running the development build
 
 ```powershell
-cd C:\Users\krisr\source\repos\room-booking-mobile
+git clone https://github.com/kris7011/room-booking-mobile.git C:\rb
+cd C:\rb
 npm ci
 npm run android:dev-build    # npx expo run:android
 ```
