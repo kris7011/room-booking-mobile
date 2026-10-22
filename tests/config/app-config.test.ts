@@ -51,7 +51,12 @@ test('app.json: Android package of the development app', () => {
 });
 
 test('app.json: config plugins for the browser and secure storage', () => {
-  assert.deepEqual(appJson.expo.plugins, ['expo-web-browser', 'expo-secure-store']);
+  assert.deepEqual(appJson.expo.plugins, [
+    'expo-web-browser',
+    'expo-secure-store',
+    ['expo-build-properties', { android: { cmakeVersion: '3.31.6' } }],
+    'expo-status-bar',
+  ]);
 });
 
 test('package.json: the auth modules are dependencies, Expo Go keeps its own scripts', () => {
