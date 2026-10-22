@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { describeError } from '../api/error-messages';
 import { roomBookingApi } from '../api/room-booking-api';
+import { AccountPanel } from '../components/AccountPanel';
 import { AllRoomsList } from '../components/AllRoomsList';
 import { ApiModeBanner } from '../components/ApiModeBanner';
 import { KeyboardAwareScrollView } from '../components/KeyboardAwareScrollView';
@@ -167,6 +168,8 @@ export function HomeScreen() {
           </View>
 
           <ApiModeBanner />
+
+          <AccountPanel />
 
           <SearchForm
             criteria={criteria}
