@@ -2,7 +2,7 @@
 
 A React Native (Expo) client for the [meeting-room-booking](https://github.com/kris7011/meeting-room-booking) API. Find a free meeting room for a given number of people, day and time, and book it from a phone or a browser.
 
-The app runs without a backend on clearly labelled demo data, and switches to the real API when `EXPO_PUBLIC_API_URL` is set.
+The app runs without a backend on clearly labelled demo data, and switches to the real API when `EXPO_PUBLIC_API_URL` is set. On Android and iOS, users can optionally sign in with Microsoft Entra ID; the API, not the app, decides who they are.
 
 ## Features
 
@@ -13,6 +13,7 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 - Loading, error, "no free rooms" and success states.
 - Booking form with client-side validation that matches the API's rules. A meeting whose start passes while the form is open cannot be confirmed; the form offers to search again from the next possible time and keeps what was typed.
 - Readable messages for API errors such as overlapping bookings (409) and validation errors (400).
+- Optional Microsoft Entra ID login on Android and iOS: authorization code flow with PKCE, refresh token in SecureStore, silent renewal, logout, and the identity confirmed by the API. See [Microsoft Entra login](#microsoft-entra-login).
 - One code base for Android, iOS and web. Only web has been tested so far, see [Platform status](#platform-status).
 
 ## Platform status
@@ -20,10 +21,10 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 | Platform | Status |
 |---|---|
 | **Web** | **Tested.** Bundling works. Rendered in headless Chrome at 600 px and at a 375 px phone viewport. The whole flow was clicked through in demo mode: search, "no free rooms", results, form validation, booking, refreshed availability. Tested in live mode against the real .NET API: room overview, search, booking saved in SQLite, overlap (409) message, and the connection error with the backend switched off. See [docs/backend-integration.md](docs/backend-integration.md). |
-| **Android** | **Not tested yet**, on neither an emulator nor a physical device. |
+| **Android** | The development build runs on a physical Samsung phone, and `roombookingdev://auth` opens the app. **Microsoft login has not been tested on a device yet**, see [Needs a real login test on a physical phone](#needs-a-real-login-test-on-a-physical-phone). |
 | **iOS** | **Not tested yet**, on neither a simulator nor a physical device. |
 
-The booking flow only uses React Native core components and `react-native-safe-area-context`, both of which are included in Expo Go, so the demo still runs in Expo Go (`npm run start:go`). The coming Microsoft login needs the Android **development build** instead, see [Android development build](#android-development-build). Native layout, the keyboard and safe areas still need to be checked on a device.
+The booking flow only uses React Native core components and `react-native-safe-area-context`, both of which are included in Expo Go, so the demo still runs in Expo Go (`npm run start:go`). Microsoft login needs the Android **development build** instead, see [Android development build](#android-development-build). Native layout, the keyboard and safe areas still need to be checked on a device.
 
 The API client is tested automatically against a mocked `fetch` that copies the backend's contract (see [Tests](#tests)). The web app is also tested end to end against the real .NET API in Chromium, locally and in CI (see [End-to-end tests](#end-to-end-tests)).
 
@@ -33,7 +34,7 @@ The API client is tested automatically against a mocked `fetch` that copies the 
 - TypeScript 6 (strict)
 - react-native-web for the browser build
 - react-native-safe-area-context for notches and status bars
-- expo-dev-client, expo-auth-session, expo-crypto, expo-web-browser and expo-secure-store, configured for the coming Microsoft login (not used for login yet)
+- expo-auth-session (browser login with PKCE), expo-web-browser, expo-crypto and expo-secure-store for Microsoft login; expo-dev-client for the development build
 - Node's built-in test runner (`node:test`) for the automated tests
 - Playwright for the end-to-end tests in a browser
 - GitHub Actions for CI
@@ -87,6 +88,83 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 
 `EXPO_PUBLIC_*` values are embedded in the app bundle. Never put secrets in them.
 
+## Microsoft Entra login
+
+On Android and iOS, the app can sign in with a Microsoft work or school account. Login is **optional**: searching and booking work exactly as before without it, in demo mode and against the API. On web there is no login (the Angular app owns it in the browser), and in Expo Go it is switched off, because Expo Go's `exp://` redirect URI cannot be registered in Entra.
+
+### How it works
+
+```
+Phone                                   Microsoft Entra ID                  meeting-room-booking API
+  "Log ind med Microsoft"
+  AuthRequest (PKCE S256, state) ──────▶ /authorize (Custom Tab / ASWebAuthenticationSession)
+  roombookingdev://auth?code&state ◀──── user signs in, consents
+  state checked, code + code_verifier ─▶ /token
+  access, refresh and ID token ◀────────
+  GET /api/me, Bearer access token ─────────────────────────────────────▶ validates signature, issuer,
+  "Bekræftet af API'et som …" ◀──────────────────────────────────────────  audience, scope; looks up user
+```
+
+- **Authorization code flow with PKCE**, as a public client: the app has **no client secret**. `AuthRequest` from `expo-auth-session` creates the code verifier and S256 challenge and a random `state`, and rejects a redirect whose `state` does not match. The code is redeemed by `src/auth/token-client.ts` (plain `fetch` with a 15-second timeout), which sends `code_verifier` and never a secret.
+- **Scopes:** `openid profile offline_access` plus the API scope (`EXPO_PUBLIC_ENTRA_API_SCOPE`). `offline_access` gives the refresh token. The response must contain the API scope, otherwise the login fails with a consent message.
+- **Who is shown:** the name comes from the ID token, after checking its audience (this app), issuer (`https://login.microsoftonline.com/{tid}/v2.0` for its own tenant), expiry and `oid`. That is for display only. **The app never decides who the user is**: in live mode it asks the API (`GET /api/me`), which validates the access token itself, and the panel says *Bekræftet af API'et som …* only after that. In demo mode it says the identity is not confirmed by an API.
+- **Storage:** only the **refresh token** and the display data are stored, in **Expo SecureStore** (Android Keystore / iOS Keychain with `WHEN_UNLOCKED_THIS_DEVICE_ONLY`, excluded from Android Auto Backup). Long values are split into chunks, because some platforms reject SecureStore values over about 2 KB. The **access token is kept in memory only**. Nothing is written to `AsyncStorage`, logs or Git.
+- **Expiry and refresh:** before every API request, `getAccessToken()` returns the token if it is valid for more than 2 more minutes, otherwise it refreshes it. Parallel requests share one refresh. Entra's rotated refresh token replaces the stored one. After an app restart the stored session is checked with Microsoft right away.
+  - refresh token expired or revoked (`invalid_grant`, `interaction_required`, for example after a password change or a Conditional Access policy) → signed out, session deleted, *Din Microsoft-session er udløbet. Log ind igen.*
+  - offline or Microsoft unavailable → still signed in with a warning; the next request tries again
+  - `401` from the API → one forced refresh and one retry, then a message
+- **Logout** forgets the tokens and deletes everything in SecureStore. A refresh or a login that finishes after logout is ignored and cannot bring the session back. The Microsoft session in the browser stays; the next login shows the account picker (`prompt=select_account`), so another account can be chosen.
+- **API calls:** `src/api/http-client.ts` gets the token from the one `AccessTokenProvider` (the `AuthController`) and adds `Authorization: Bearer …`. Nobody signed in → no header, as before. A token is only sent over HTTPS, or over HTTP to `localhost`, `10.0.2.2` or a private network address (the development setups); never in plain HTTP over the internet.
+- **Errors** (`src/auth/auth-errors.ts`): cancelled, access denied, consent missing, configuration errors (for example `AADSTS50011` redirect URI mismatch or `AADSTS7000218` when the redirect is registered as *Web*), state mismatch, expired session, network, timeout and storage errors each get a Danish message with the AADSTS code, never a token.
+
+### Configuration
+
+Set in `.env.local` (gitignored; restart Metro after changing it):
+
+| Variable | Value |
+|---|---|
+| `EXPO_PUBLIC_ENTRA_CLIENT_ID` | Application (client) ID of the **mobile app's** registration |
+| `EXPO_PUBLIC_ENTRA_API_SCOPE` | Full scope of the **API's** registration, `api://<API client ID>/access_as_user` |
+| `EXPO_PUBLIC_ENTRA_TENANT` | `organizations` (any work or school tenant, the default), or one tenant ID or domain |
+
+These are identifiers, not secrets, and end up in the app bundle. Without them the app runs without login. Invalid values (a client ID that is not a GUID, a bare scope name, a scope of the app's own registration, `consumers`) switch login off and the panel says why.
+
+The API must have the token validation from [meeting-room-booking#9](https://github.com/kris7011/meeting-room-booking/pull/9) and `Entra__ApiClientId` set. Without it, the panel says *API'et understøtter endnu ikke login* (404) or *API'et er ikke sat op til Microsoft-login* (503). Booking still works.
+
+### Manual steps in the Microsoft Entra admin center
+
+**Mobile app registration** (the one in `EXPO_PUBLIC_ENTRA_CLIENT_ID`):
+
+1. **Authentication → Add a platform → Mobile and desktop applications**, custom redirect URI `roombookingdev://auth`. **Not** *Web* (that requires a client secret, `AADSTS7000218`) and not *Single-page application*.
+2. **Authentication → Advanced settings → Allow public client flows**: can stay *No* for this flow. Create no client secret or certificate.
+3. **API permissions → Add a permission → My APIs → Room Booking API → Delegated → `access_as_user`**. `openid`, `profile` and `offline_access` need no extra permission. Grant admin consent if users of the tenant may not consent themselves.
+4. Supported account types: *Accounts in any organizational directory* for `organizations`. For users from other tenants, an administrator there must consent to the app.
+
+**API registration**: see the README of the API (*Sign-in with Microsoft Entra ID*): scope `access_as_user` under *Expose an API*, and `requestedAccessTokenVersion: 2` in the manifest.
+
+For a release build, a second registration (or a second redirect URI) with the release app's scheme is needed; this setup is for the development build `io.github.kris7011.roombooking.dev`.
+
+### Needs a real login test on a physical phone
+
+**⚠️ Manual.** The automated tests cover the logic with fakes for the browser, Entra's token endpoint and SecureStore. These parts can only be checked on a device, with the development build (`npm run android:dev-build`) and a real Microsoft account:
+
+| # | Test | Expected |
+|---|---|---|
+| 1 | Tap **Log ind med Microsoft**, sign in | Custom Tab opens Microsoft's login, returns to the app via `roombookingdev://auth`; the panel shows name and e-mail |
+| 2 | First login in a tenant | The consent screen lists Room Booking API; after consent the login completes. With consent refused: *Microsoft afviste login…* |
+| 3 | Close the Custom Tab without signing in | *Login blev annulleret.*, no error |
+| 4 | Live mode with the API from PR #9 (`Entra__ApiClientId` set) | *Bekræftet af API'et som …*; the API log shows no 401 |
+| 5 | Close the app completely and start it again | Still signed in, without a new browser login |
+| 6 | Leave the app for more than an hour (or until the access token expires), then search | The search works; the token was renewed silently |
+| 7 | Flight mode, restart the app | Signed in with the warning *Kunne ikke få forbindelse til Microsoft…*; with the network back, the next search works |
+| 8 | Revoke the sessions (Entra admin center → user → *Revoke sessions*, or change the password), then restart the app | Signed out with *Din Microsoft-session er udløbet* |
+| 9 | **Log ud**, then **Log ind med Microsoft** | Signed out at once; the next login shows the account picker |
+| 10 | `adb shell run-as io.github.kris7011.roombooking.dev cat shared_prefs/SecureStore.xml` while signed in, and again after logout | Signed in: `…roombooking.auth.v1.*` entries whose values are ciphertext, no readable token. After logout: no such entries |
+| 11 | Metro and `adb logcat` during 1–9 | No token, code or code verifier appears in the logs |
+| 12 | Expo Go (`npm run android:go`) | The panel says login needs the development build; demo booking works |
+
+iOS has not been built or tested at all.
+
 ## Commands
 
 | Command | What it does |
@@ -118,15 +196,28 @@ src/
     room-booking-api.ts  RoomBookingApi interface; picks live or demo
     live-api.ts          Calls the .NET API
     demo-api.ts          In-memory demo implementation
-    http-client.ts       fetch wrapper: base URL, query string, 10 s timeout, ApiError
+    http-client.ts       fetch wrapper: base URL, query string, 10 s timeout, ApiError, bearer token
+    current-user.ts      GET /api/me: who the API says the signed-in user is
     error-messages.ts    Maps errors to user-facing (Danish) messages
   auth/
-    auth-config.ts       Scheme, redirect URI and makeRedirectUri options (no login yet)
+    auth-config.ts       Scheme, redirect URI and makeRedirectUri options
+    entra-config.ts      Reads and validates the EXPO_PUBLIC_ENTRA_* settings; endpoints and scopes
+    auth-controller.ts   Login state machine, the only holder of tokens: sign-in, refresh, expiry, logout
+    token-client.ts      Entra token endpoint: code + PKCE verifier, refresh (no client secret)
+    id-token.ts          Reads the ID token for display (audience, issuer, tenant, expiry checked)
+    session-storage.ts   Refresh token and display data in SecureStore, in chunks
+    auth-errors.ts       AuthFlowError, AADSTS codes and Danish messages
+    auth-availability.ts Whether login is offered: web, Expo Go, settings
+    auth-runtime.native.ts  Android/iOS: wires AuthRequest, token client and SecureStore together
+    auth-runtime.ts      Web: login unavailable
+    secure-store.native.ts  SecureStore adapter (WHEN_UNLOCKED_THIS_DEVICE_ONLY)
+    AuthProvider.tsx     React context and useAuth()
     redirect-uri.native.ts  Calls makeRedirectUri on Android/iOS; logs the URI in development
     redirect-uri.ts      Web: no redirect URI (Angular owns web login)
-  components/            Reusable UI: RoomCard, SearchForm, BookingForm, pickers, …
+  components/            Reusable UI: RoomCard, SearchForm, BookingForm, AccountPanel, pickers, …
   config/env.ts          Reads EXPO_PUBLIC_API_URL, decides demo or live mode
   hooks/useClock.tsx     Current time, renewed per half hour, at midnight and on AppState "active"
+  hooks/useServerIdentity.tsx  Asks GET /api/me who the signed-in user is
   models/                TypeScript types mirroring the API contracts
   screens/HomeScreen.tsx The screen: owns state and calls the API
   theme/theme.ts         Colors, spacing and typography tokens
@@ -135,14 +226,14 @@ src/
   utils/clock.ts         When the shown time may be stale (timers + resume), testable in Node
 tests/
   api/                   Demo API, live API client, error messages
-  auth/                  Redirect URI configuration
+  auth/                  Redirect URI, Entra settings, login, tokens, session storage, errors
   config/                Environment handling, app.json and the generated Android manifest
   utils/                 Dates, time zones and daylight saving time
-  support/               Test setup: demo/live mode and a fixed time zone
+  support/               Test setup: demo/live mode, a fixed time zone, fake Entra tokens and SecureStore
 e2e/                     End-to-end tests (Playwright), see "End-to-end tests"
   playwright.config.ts   Starts the API and the web app, one browser, one test at a time
   global-setup.ts        Refuses to run unless the API uses a new, empty E2E database
-  specs/                 rooms, search, booking, api-errors, clock, past-bookings
+  specs/                 rooms, search, booking, api-errors, clock, past-bookings, account
   support/               Ports and paths, page object, API helpers, fixtures, fixed test data
   scripts/serve-web.mjs  Exports the web app for the E2E API and serves it
 scripts/run-tests.js     Compiles and runs the tests (used by npm test)
@@ -168,6 +259,14 @@ Covered:
 - **Error messages and environment handling**, including recognising the API's 400 on `startUtc` as "the meeting has started".
 - **Redirect URI** (`auth-config.test.ts`): the URI is exactly `roombookingdev://auth`; `makeRedirectUri` gets `scheme`, `path` and `native`, and returns `native` in a development or release build; web gets no URI and never calls `makeRedirectUri`; the development log line flags an Expo Go `exp://` URL. `makeRedirectUri` is replaced by a stand-in that follows expo-auth-session 58's rule, because the real one needs React Native.
 - **App config** (`app-config.test.ts`): `scheme`, Android package and config plugins in `app.json`, SDK 58 versions of the auth modules, and the Expo Go scripts. It also runs `expo config --type introspect`, which applies all config plugins like `expo prebuild` without writing `android/`, and checks that `MainActivity` has a `VIEW`/`BROWSABLE` intent filter for `roombookingdev` (and for the dev client's `exp+room-booking-mobile`), and that SecureStore data is excluded from Android Auto Backup.
+
+- **Entra settings** (`entra-config.test.ts`): endpoints and scopes for `organizations`, a tenant ID or a domain; missing values, a client ID that is not a GUID, a bare scope, the app's own scope, `consumers` and tenant values that would change the URL are refused. `.env.local` is gitignored and no source file contains a client secret.
+- **ID token** (`id-token.test.ts`): base64url and UTF-8 (æøå), malformed tokens, audience, issuer for the token's own tenant, v1.0 issuer, required tenant, expiry with clock skew, missing `oid`.
+- **Token endpoint** (`token-client.test.ts`): the exact form for the code exchange (with `code_verifier`, without `client_secret`) and the refresh; AADSTS50011, AADSTS7000218, expired and revoked refresh tokens, MFA required, network failure, timeout, 503; missing access token, wrong token type, missing lifetime, API scope not granted.
+- **Session storage** (`session-storage.test.ts`): round trip, chunks below 2 KB, no leftover chunks, damaged or unknown data is deleted, unreadable and unwritable keystore.
+- **Login flow** (`auth-controller.test.ts`): restore at start (valid, expired, offline, unreadable), sign-in, cancel, redirect errors, state mismatch, ID token for another app, double tap, no refresh token, keystore failures; renewal 2 minutes before expiry, forced renewal, one shared refresh for parallel calls, rotation; expired session signs out and deletes, offline keeps the session; logout deletes everything, also while a refresh or login is still running. Every test checks that no token reaches the console, the state or the storage (except the refresh token).
+- **Tokens in API calls** (`http-client-auth.test.ts`): `Authorization` only when signed in, one retry after a forced refresh on 401, an expired session becomes a Danish `ApiError` without a request, HTTPS or local/private HTTP only, `GET /api/me` and how its failures are shown.
+- **Login availability** (`auth-availability.test.ts`): web, Expo Go, missing and invalid settings.
 
 Not covered yet: React components in isolation (this needs `jest-expo` and React Native Testing Library). The end-to-end tests cover them in the browser.
 
@@ -265,6 +364,7 @@ The tests wait for real states: an API response (`waitForResponse`), a visible t
 | `search.spec.ts` | Local time is sent as UTC. The smallest fitting room is listed first. Capacity filter. Booked rooms are hidden, but back-to-back bookings are not. "Ingen ledige lokaler". |
 | `booking.spec.ts` | Form validation sends nothing. A booking is created (201 with CORS header), shown, stored and hidden from the results, also after a reload. The booking is still there for a new API process on the same file. A double booking gets 409 and the conflict message. |
 | `past-bookings.spec.ts` | The start of an open booking form passes while the user types: warning, *Bekræft booking* disabled, text kept; **Søg igen** searches from the next half hour and reopens the same room with the text, and the booking goes through. The time is checked again right before sending (no request when a late timer has not noticed yet). With the phone's clock years behind, the API's 400 on `startUtc` shows the same warning (with a hint about the clock) instead of an error. |
+| `account.spec.ts` | On web the account panel says login is only in the mobile app and shows no login or logout button. Search and booking work without login, no request carries an `Authorization` header, and `/api/me` is never called. |
 | `api-errors.spec.ts` | 400 on `startUtc` when a new booking does not start after the server's time, or an existing one is moved into the past (which leaves it unchanged). 400 for an invalid period, capacity, empty fields and a too-long title. 409 for overlaps, 201 for back-to-back bookings. 404 for an unknown room or booking. The app's messages for 400 and 404 responses. |
 
 Two scenarios cannot be produced by a real user, so the tests steer them:
@@ -291,7 +391,7 @@ All output (exported web app, report, traces) is written to `e2e/.output/`, whic
 
 ## Android development build
 
-Microsoft (Entra ID) login on Android needs a fixed redirect URI that the app itself owns. Expo Go cannot provide one (its URLs are `exp://<host>:8081/--/…` and change with the network), so login will run in a **development build**: the app built locally with `expo-dev-client`. This section sets that build up. The login itself (sign-in, token exchange, session storage) comes in a later pull request; nothing here signs in or stores tokens.
+Microsoft (Entra ID) login on Android needs a fixed redirect URI that the app itself owns. Expo Go cannot provide one (its URLs are `exp://<host>:8081/--/…` and change with the network), so login runs in a **development build**: the app built locally with `expo-dev-client`. This section sets that build up. The login itself is described in [Microsoft Entra login](#microsoft-entra-login).
 
 | Setting | Value | Defined in |
 |---|---|---|
