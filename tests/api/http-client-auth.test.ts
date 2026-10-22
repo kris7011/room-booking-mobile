@@ -361,4 +361,98 @@ describe('a request never changes identity while it waits for its token', () => 
     assert.equal(fetchMock.mock.callCount(), 1, "only the first, rejected attempt with Anna's token");
     assert.equal(headersOf(fetchMock).Authorization, 'Bearer fake-access-Anna');
   });
+  /**
+   * fetch stand-in whose first call waits until the test answers it, so the
+   * test can change the session while Anna's first attempt is on its way.
+   * Later calls answer 201 at once (and must not happen in the abort cases).
+   */
+  function fetchWithHeldFirstAnswer() {
+    let answerFirst: ((response: Response) => void) | undefined;
+    let calls = 0;
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      if (++calls === 1) return new Promise<Response>((resolve) => (answerFirst = resolve));
+      return new Response(JSON.stringify({ id: 1 }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+    });
+    return {
+      fetchMock,
+      sent: () => answerFirst !== undefined,
+      answer401: () => answerFirst?.(new Response(null, { status: 401 })),
+    };
+  }
+
+  function trackedRefresh(calls: string[]): AuthControllerDeps['refresh'] {
+    return async (refreshToken) => {
+      calls.push(refreshToken);
+      return {
+        accessToken: `${refreshToken.replace('refresh', 'access')}-renewed`,
+        accessTokenExpiresAt: NOW_MS + 2 * HOUR,
+        refreshToken: `${refreshToken}-rotated`,
+      };
+    };
+  }
+
+  test('401, then logout and login as Bo before the retry: aborted, no second request, Bo is not renewed', async () => {
+    const refreshCalls: string[] = [];
+    const { controller } = await signedInAsAnna(trackedRefresh(refreshCalls));
+    const { fetchMock, sent, answer401 } = fetchWithHeldFirstAnswer();
+
+    const pending = liveApi.createBooking(booking);
+    await until(sent, "Anna's first attempt is on its way");
+    await controller.signOut();
+    await controller.signIn();
+    const state = controller.getState();
+    assert.equal(state.status === 'signed-in' && state.user.name, 'Bo');
+    answer401();
+
+    await rejectsAsSessionChanged(pending);
+    assert.equal(fetchMock.mock.callCount(), 1, 'the retry must not be sent');
+    assert.equal(headersOf(fetchMock).Authorization, 'Bearer fake-access-Anna');
+    assert.deepEqual(refreshCalls, [], "Bo's session must not be renewed for Anna's request");
+  });
+
+  test('401, then logout only before the retry: aborted with session-changed, no second request', async () => {
+    const refreshCalls: string[] = [];
+    const { controller } = await signedInAsAnna(trackedRefresh(refreshCalls));
+    const { fetchMock, sent, answer401 } = fetchWithHeldFirstAnswer();
+
+    const pending = liveApi.createBooking(booking);
+    await until(sent, "Anna's first attempt is on its way");
+    await controller.signOut();
+    answer401();
+
+    await rejectsAsSessionChanged(pending);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    assert.deepEqual(refreshCalls, []);
+  });
+
+  test('logout and login as Bo during the forced renewal after a 401: aborted, no second request', async () => {
+    const { store, controller } = await signedInAsAnna();
+    const fetchMock = stubFetch([401, 201], { id: 1 });
+
+    const write = store.hold('set');
+    const pending = liveApi.createBooking(booking);
+    await until(() => store.waiting.set > 0, "the forced renewal of Anna's token is saving");
+    const signingOut = controller.signOut();
+    const signingIn = controller.signIn();
+    await until(() => controller.getState().status === 'signed-in', 'Bo has signed in');
+    write.release();
+
+    await rejectsAsSessionChanged(pending);
+    await Promise.all([signingOut, signingIn]);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    assert.equal(headersOf(fetchMock).Authorization, 'Bearer fake-access-Anna');
+  });
+
+  test('same session: a 401 renews Anna\'s token once and the retry carries the renewed token', async () => {
+    const refreshCalls: string[] = [];
+    await signedInAsAnna(trackedRefresh(refreshCalls));
+    const fetchMock = stubFetch([401, 201], { id: 7 });
+
+    assert.deepEqual(await liveApi.createBooking(booking), { id: 7 });
+
+    assert.deepEqual(refreshCalls, ['fake-refresh-Anna']);
+    assert.equal(fetchMock.mock.callCount(), 2);
+    assert.equal(headersOf(fetchMock, 0).Authorization, 'Bearer fake-access-Anna');
+    assert.equal(headersOf(fetchMock, 1).Authorization, 'Bearer fake-access-Anna-renewed');
+  });
 });

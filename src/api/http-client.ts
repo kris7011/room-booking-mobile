@@ -110,19 +110,35 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
   // A request that starts signed in stays that user's request: it is sent
   // with that user's token or not at all, never anonymously or as another
   // user who signed in while it waited.
-  let grant = provider ? await getAccessGrant(provider, false) : null;
+  const grant = provider ? await getAccessGrant(provider, false) : null;
   let response = await send(url, options, grant);
 
   // A 401 for a token the app thought was valid (revoked, or the clocks
   // disagree): renew it once and repeat the request. Safe for a POST too,
-  // because the API rejects the token before the endpoint runs. Signed out
-  // meanwhile: the 401 stands, nothing is sent again.
+  // because the API rejects the token before the endpoint runs.
+  //
+  // The retry belongs to the same session as the first attempt. A fresh
+  // grant would bind to whoever is signed in by now, so the original grant
+  // is checked before renewing (no renewal for a session that has ended)
+  // and again afterwards (the renewed token is still that session's).
   if (response.status === 401 && provider && grant) {
-    grant = await getAccessGrant(provider, true);
-    if (grant) response = await send(url, options, grant);
+    assertStillCurrent(grant);
+    const renewed = await getAccessGrant(provider, true);
+    assertStillCurrent(grant);
+    if (!renewed) throw sessionChangedError();
+    response = await send(url, options, renewed);
   }
 
   return readResponse<T>(url, response);
+}
+
+function sessionChangedError(): ApiError {
+  const cause = new AuthFlowError('session-changed', 'Session ended before sending');
+  return new ApiError('auth', 'The session ended before the request was sent.', undefined, undefined, cause);
+}
+
+function assertStillCurrent(grant: AccessGrant): void {
+  if (!grant.isCurrent()) throw sessionChangedError();
 }
 
 async function getAccessGrant(provider: AccessTokenProvider, forceRefresh: boolean): Promise<AccessGrant | null> {
@@ -137,10 +153,7 @@ async function getAccessGrant(provider: AccessTokenProvider, forceRefresh: boole
 async function send(url: string, options: RequestOptions, grant: AccessGrant | null): Promise<Response> {
   // Checked synchronously right before fetch, so nothing can end the session
   // between this check and the request leaving with its token.
-  if (grant && !grant.isCurrent()) {
-    const cause = new AuthFlowError('session-changed', 'Session ended before sending');
-    throw new ApiError('auth', 'The session ended before the request was sent.', undefined, undefined, cause);
-  }
+  if (grant) assertStillCurrent(grant);
   const accessToken = grant?.accessToken ?? null;
 
   // fetch has no built-in timeout; abort it ourselves so a phone that cannot
