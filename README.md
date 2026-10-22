@@ -23,7 +23,7 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 | **Android** | **Not tested yet**, on neither an emulator nor a physical device. |
 | **iOS** | **Not tested yet**, on neither a simulator nor a physical device. |
 
-The app only uses React Native core components and `react-native-safe-area-context`, both of which are included in Expo Go. No development build is needed. Native layout, the keyboard and safe areas still need to be checked on a device.
+The booking flow only uses React Native core components and `react-native-safe-area-context`, both of which are included in Expo Go, so the demo still runs in Expo Go (`npm run start:go`). The coming Microsoft login needs the Android **development build** instead, see [Android development build](#android-development-build). Native layout, the keyboard and safe areas still need to be checked on a device.
 
 The API client is tested automatically against a mocked `fetch` that copies the backend's contract (see [Tests](#tests)). The web app is also tested end to end against the real .NET API in Chromium, locally and in CI (see [End-to-end tests](#end-to-end-tests)).
 
@@ -33,22 +33,25 @@ The API client is tested automatically against a mocked `fetch` that copies the 
 - TypeScript 6 (strict)
 - react-native-web for the browser build
 - react-native-safe-area-context for notches and status bars
+- expo-dev-client, expo-auth-session, expo-crypto, expo-web-browser and expo-secure-store, configured for the coming Microsoft login (not used for login yet)
 - Node's built-in test runner (`node:test`) for the automated tests
 - Playwright for the end-to-end tests in a browser
 - GitHub Actions for CI
 
 ## Getting started
 
-Prerequisites: Node.js 24 and npm. To run on a phone, install **Expo Go**. To run on an emulator, install Android Studio or Xcode.
+Prerequisites: Node.js 24 and npm. To run on a phone, install **Expo Go**. To run on an emulator, install Android Studio or Xcode. The Android development build needs more, see [Android development build](#android-development-build).
 
 ```bash
 git clone git@github.com:kris7011/room-booking-mobile.git
 cd room-booking-mobile
 npm ci
-npm run web        # or: npm start, then scan the QR code with Expo Go
+npm run web        # or: npm run start:go, then scan the QR code with Expo Go
 ```
 
 Without further setup the app starts in **demo mode**.
+
+Because `expo-dev-client` is installed, plain `npm start` now targets the development build. For Expo Go, use `npm run start:go` (or `npm run android:go`), or press `s` in the Expo terminal to switch.
 
 ## Demo API vs live API
 
@@ -74,7 +77,7 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
    | Physical phone with Expo Go | `http://<your PC's LAN IP>:5003` |
    | Web browser on the same PC | `http://localhost:5003` |
 
-3. Restart `npm start`, then reload the app (press `r`).
+3. Restart the dev server (`npm start`, or `npm run start:go` for Expo Go), then reload the app (press `r`).
 
 `localhost` always means the device the app runs on, which is why the address differs per device. Never commit a personal IP address. `.env.local` exists for that.
 
@@ -88,8 +91,11 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 
 | Command | What it does |
 |---|---|
-| `npm start` | Start the Expo dev server (Expo Go, emulators, web) |
-| `npm run web` / `android` / `ios` | Start and open a specific platform |
+| `npm start` | Start the Expo dev server for the development build (and web) |
+| `npm run start:go` | Start the Expo dev server for Expo Go |
+| `npm run web` / `android` / `ios` | Start and open a specific platform (`android`/`ios` in the development build) |
+| `npm run android:go` | Start and open the app in Expo Go on a connected Android device or emulator |
+| `npm run android:dev-build` | Build the Android development build locally, install it and start Metro (`expo run:android`) |
 | `npm run typecheck` | Type-check the app (`tsconfig.json`), the tests (`tsconfig.test.json`) and the E2E tests (`e2e/tsconfig.json`) |
 | `npm test` | Compile and run the automated tests |
 | `npm run test:e2e` | Start the API and the web app, run the end-to-end tests, stop both again |
@@ -114,6 +120,10 @@ src/
     demo-api.ts          In-memory demo implementation
     http-client.ts       fetch wrapper: base URL, query string, 10 s timeout, ApiError
     error-messages.ts    Maps errors to user-facing (Danish) messages
+  auth/
+    auth-config.ts       Scheme, redirect URI and makeRedirectUri options (no login yet)
+    redirect-uri.native.ts  Calls makeRedirectUri on Android/iOS; logs the URI in development
+    redirect-uri.ts      Web: no redirect URI (Angular owns web login)
   components/            Reusable UI: RoomCard, SearchForm, BookingForm, pickers, …
   config/env.ts          Reads EXPO_PUBLIC_API_URL, decides demo or live mode
   hooks/useClock.tsx     Current time, renewed per half hour, at midnight and on AppState "active"
@@ -125,7 +135,8 @@ src/
   utils/clock.ts         When the shown time may be stale (timers + resume), testable in Node
 tests/
   api/                   Demo API, live API client, error messages
-  config/                Environment handling
+  auth/                  Redirect URI configuration
+  config/                Environment handling, app.json and the generated Android manifest
   utils/                 Dates, time zones and daylight saving time
   support/               Test setup: demo/live mode and a fixed time zone
 e2e/                     End-to-end tests (Playwright), see "End-to-end tests"
@@ -155,6 +166,8 @@ Covered:
 - **Demo bookings:** response shape, trimming, ids, availability updates, 409 for overlaps, 404 for unknown rooms, and 400 on `startUtc` for a start that is not in the future (checked before the room, like the API).
 - **Live API client:** exact URLs, query encoding, headers, JSON body, 201/400/404/409/500, non-JSON bodies, network failures and the 10-second timeout. `fetch` is replaced with a mock (`mock.method`) and timers are faked, so no real requests are made.
 - **Error messages and environment handling**, including recognising the API's 400 on `startUtc` as "the meeting has started".
+- **Redirect URI** (`auth-config.test.ts`): the URI is exactly `roombookingdev://auth`; `makeRedirectUri` gets `scheme`, `path` and `native`, and returns `native` in a development or release build; web gets no URI and never calls `makeRedirectUri`; the development log line flags an Expo Go `exp://` URL. `makeRedirectUri` is replaced by a stand-in that follows expo-auth-session 58's rule, because the real one needs React Native.
+- **App config** (`app-config.test.ts`): `scheme`, Android package and config plugins in `app.json`, SDK 58 versions of the auth modules, and the Expo Go scripts. It also runs `expo config --type introspect`, which applies all config plugins like `expo prebuild` without writing `android/`, and checks that `MainActivity` has a `VIEW`/`BROWSABLE` intent filter for `roombookingdev` (and for the dev client's `exp+room-booking-mobile`), and that SecureStore data is excluded from Android Auto Backup.
 
 Not covered yet: React components in isolation (this needs `jest-expo` and React Native Testing Library). The end-to-end tests cover them in the browser.
 
@@ -276,6 +289,142 @@ Two scenarios cannot be produced by a real user, so the tests steer them:
 
 All output (exported web app, report, traces) is written to `e2e/.output/`, which is gitignored.
 
+## Android development build
+
+Microsoft (Entra ID) login on Android needs a fixed redirect URI that the app itself owns. Expo Go cannot provide one (its URLs are `exp://<host>:8081/--/…` and change with the network), so login will run in a **development build**: the app built locally with `expo-dev-client`. This section sets that build up. The login itself (sign-in, token exchange, session storage) comes in a later pull request; nothing here signs in or stores tokens.
+
+| Setting | Value | Defined in |
+|---|---|---|
+| URL scheme | `roombookingdev` | `app.json` → `expo.scheme` |
+| Android package | `io.github.kris7011.roombooking.dev` | `app.json` → `expo.android.package` |
+| Redirect URI | `roombookingdev://auth` | `src/auth/auth-config.ts` |
+| Dev client scheme | `exp+room-booking-mobile` | Added by `expo-dev-client` (opens a dev server URL) |
+
+`makeRedirectUri` is called with `{ scheme: 'roombookingdev', path: 'auth', native: 'roombookingdev://auth' }`. In a development or release build on Android, expo-auth-session 58 returns `native` unchanged, so the result is exactly `roombookingdev://auth`. In Expo Go it returns an `exp://` URL instead, and on web the app asks for no redirect URI at all: the Angular app has its own Microsoft login, and the Expo web build has none. `src/auth/redirect-uri.ts` keeps `expo-auth-session` out of the web bundle.
+
+For the later Entra setup:
+
+- Register `roombookingdev://auth` on the mobile app registration, platform *Mobile and desktop applications*. It is a public client: no client secret, the login will use PKCE.
+- The API permission (scope) is **`access_as_user`**, requested as `<API Application ID URI>/access_as_user`.
+- `knownClientApplications` on the API registration is left unchanged. Whether it is needed is decided during the consent tests.
+
+### Preparing Windows (PowerShell)
+
+Expo SDK 58 builds Android with Gradle 9.4.1, **JDK 17**, `compileSdk` 37, `targetSdk` 36, Build-Tools 37.0.0, NDK 27.1.12297006 and CMake **3.31.6**. On Windows, keep the project in a short path (for example `C:\rb`) to avoid native Ninja path-length errors. Android SDK Platform 36 is installed for the emulator image and `targetSdk`; Platform 37 is needed to compile. Run the steps in a new PowerShell window (no administrator rights needed unless `winget` asks).
+
+1. **JDK 17** (Microsoft Build of OpenJDK) and `JAVA_HOME`:
+
+   ```powershell
+   winget install --id Microsoft.OpenJDK.17 --exact --accept-source-agreements --accept-package-agreements
+   $jdk = Get-ChildItem "C:\Program Files\Microsoft" -Directory -Filter "jdk-17*" | Sort-Object Name -Descending | Select-Object -First 1
+   [Environment]::SetEnvironmentVariable("JAVA_HOME", $jdk.FullName, "User")
+   ```
+
+2. **Android Studio**:
+
+   ```powershell
+   winget install --id Google.AndroidStudio --exact --accept-source-agreements --accept-package-agreements
+   ```
+
+   Open Android Studio once and finish the setup wizard (*Standard*). It installs the SDK in `%LOCALAPPDATA%\Android\Sdk`. Then *More Actions → SDK Manager → SDK Tools*, tick **Android SDK Command-line Tools (latest)** and click *Apply*.
+
+3. **`ANDROID_HOME` and `Path`**, for your user:
+
+   ```powershell
+   $sdk = "$env:LOCALAPPDATA\Android\Sdk"
+   [Environment]::SetEnvironmentVariable("ANDROID_HOME", $sdk, "User")
+   $parts = @(([Environment]::GetEnvironmentVariable("Path", "User") -split ";") | Where-Object { $_ })
+   foreach ($dir in "$sdk\platform-tools", "$sdk\emulator", "$sdk\cmdline-tools\latest\bin") {
+     if ($parts -notcontains $dir) { $parts += $dir }
+   }
+   [Environment]::SetEnvironmentVariable("Path", ($parts -join ";"), "User")
+
+   # Use the new values in this window too (new windows get them automatically)
+   $env:JAVA_HOME = [Environment]::GetEnvironmentVariable("JAVA_HOME", "User")
+   $env:ANDROID_HOME = $sdk
+   $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+   ```
+
+4. **SDK packages**: Platform 36 and 37.0, ADB (`platform-tools`), Build-Tools, NDK, CMake and an emulator image. CMake 3.31.6 is required by `expo-build-properties` to work around Windows Ninja path-length failures:
+
+   ```powershell
+   sdkmanager --licenses   # answer y to each license
+   sdkmanager --channel=3 "platform-tools" "platforms;android-36" "platforms;android-37.0" "build-tools;37.0.0" "ndk;27.1.12297006" "cmake;3.31.6" "emulator" "system-images;android-36;google_apis;x86_64"
+   ```
+
+5. **Emulator** (or connect a phone with USB debugging on instead). On Windows 11 Home, the emulator needs the *Windows Hypervisor Platform* feature (*Turn Windows features on or off*).
+
+   ```powershell
+   avdmanager create avd --name RoomBooking_API36 --package "system-images;android-36;google_apis;x86_64" --device "pixel_7"
+   Start-Process emulator -ArgumentList "-avd", "RoomBooking_API36"
+   ```
+
+   `avdmanager list device` shows other device profiles.
+
+6. **Check**:
+
+   ```powershell
+   java -version            # openjdk version "17.…"
+   $env:JAVA_HOME           # C:\Program Files\Microsoft\jdk-17.…
+   adb version              # Android Debug Bridge …
+   adb devices              # emulator-5554   device
+   sdkmanager --list_installed
+   ```
+
+### Building and running the development build
+
+```powershell
+git clone https://github.com/kris7011/room-booking-mobile.git C:\rb
+cd C:\rb
+npm ci
+npm run android:dev-build    # npx expo run:android
+```
+
+`expo run:android` generates `android/` from `app.json` (Continuous Native Generation; the folder is gitignored, never edit it by hand), builds the debug APK with Gradle, installs it on the running emulator or phone and starts Metro. The first build downloads Gradle and its dependencies and can take 10–20 minutes. Gradle uses up to 2 GB of heap; on a low-memory machine, close other large applications first. With several devices attached, add `-- --device`.
+
+The Metro terminal then shows:
+
+```
+[auth] Redirect URI: roombookingdev://auth
+```
+
+That line is written once at start (and on every reload, `r`) in development only, and nothing else about login is logged. In Expo Go it reads `exp://…/--/auth (not roombookingdev://auth: …)`.
+
+Later, as long as the native configuration has not changed, start Metro only and open the installed app: `npm start`, then press `a`. Run `npm run android:dev-build` again after changing `app.json`, a config plugin or a package with native code.
+
+Live mode works as in Expo Go: `EXPO_PUBLIC_API_URL=http://10.0.2.2:5003` in `.env.local` for the emulator. The debug build allows plain HTTP; a release build would need HTTPS.
+
+### Testing deep links
+
+With the development build installed and the app loaded from Metro (otherwise the dev launcher catches the link first):
+
+```powershell
+# Is roombookingdev:// registered for the app?
+adb shell pm query-activities --components -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "roombookingdev://auth"
+# Expected: io.github.kris7011.roombooking.dev/.MainActivity
+
+# Open the redirect URI the way a browser would
+adb shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "roombookingdev://auth" io.github.kris7011.roombooking.dev
+# Expected: Status: ok, Activity: io.github.kris7011.roombooking.dev/.MainActivity, and the app comes to the front
+
+# The same without the package name, as Android resolves it for a browser
+npx uri-scheme open "roombookingdev://auth" --android
+```
+
+The app has no handler for `/auth` yet, so the link only brings it to the front; the booking screen stays as it was. The later login PR lets expo-auth-session pick the response up from this redirect.
+
+### Expo Go demo, separately
+
+Expo Go still runs the app unchanged, in demo mode without any backend:
+
+```powershell
+$env:EXPO_NO_DOTENV = "1"     # ignore .env.local, so the app uses demo data
+npm run android:go            # or: npm run start:go and scan the QR code
+Remove-Item Env:EXPO_NO_DOTENV
+```
+
+Run either the development build's Metro or Expo Go's, not both: both use port 8081.
+
 ## Time handling
 
 The search form has two modes:
@@ -291,7 +440,7 @@ The API rejects a booking whose start is not after the server's current time wit
 
 ### Manual testing on a physical Android device
 
-Install a development build or run in Expo Go (`npm run android`). Turn off battery optimisation for the app only if a step behaves differently with it on, and note it.
+Install the development build (`npm run android:dev-build`) or run in Expo Go (`npm run android:go`). Turn off battery optimisation for the app only if a step behaves differently with it on, and note it.
 
 1. **Default after opening.** Open the app at, say, 09:40. The time is 10:00–11:00 and "I dag" is selected.
 2. **Left open.** Keep the screen on (Developer options → *Stay awake*). At 10:00 the time changes to 10:30–11:30 without touching the screen.
