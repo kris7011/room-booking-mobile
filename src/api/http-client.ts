@@ -1,3 +1,4 @@
+import { AuthFlowError } from '../auth/auth-errors';
 import { isDevelopmentBundle } from '../config/build';
 import { apiBaseUrl } from '../config/env';
 import type { ProblemDetails } from '../models/problem-details';
@@ -22,13 +23,21 @@ export class ApiError extends Error {
   }
 }
 
+/** An access token together with a check that its session is still the current one. */
+export interface AccessGrant {
+  accessToken: string;
+  /** False once the user has signed out (or out and in again) since the grant was made. */
+  isCurrent(): boolean;
+}
+
 /**
  * Where requests get their access token: the AuthController while the app
  * runs, a fake in tests, nothing when login is unavailable. null means
- * "nobody is signed in": the request is sent without Authorization.
+ * "nobody is signed in": the request is sent without Authorization, as
+ * without login. A rejection means the request must not be sent at all.
  */
 export interface AccessTokenProvider {
-  getAccessToken(options?: { forceRefresh?: boolean }): Promise<string | null>;
+  getAccessGrant(options?: { forceRefresh?: boolean }): Promise<AccessGrant | null>;
 }
 
 let accessTokenProvider: AccessTokenProvider | null = null;
@@ -98,30 +107,42 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
   // goes out exactly as without login.
   const provider = canSendBearerToken(url, { development: isDevelopmentBundle() }) ? accessTokenProvider : null;
 
-  let accessToken = provider ? await getAccessToken(provider, false) : null;
-  let response = await send(url, options, accessToken);
+  // A request that starts signed in stays that user's request: it is sent
+  // with that user's token or not at all, never anonymously or as another
+  // user who signed in while it waited.
+  let grant = provider ? await getAccessGrant(provider, false) : null;
+  let response = await send(url, options, grant);
 
   // A 401 for a token the app thought was valid (revoked, or the clocks
   // disagree): renew it once and repeat the request. Safe for a POST too,
-  // because the API rejects the token before the endpoint runs.
-  if (response.status === 401 && provider && accessToken) {
-    accessToken = await getAccessToken(provider, true);
-    if (accessToken) response = await send(url, options, accessToken);
+  // because the API rejects the token before the endpoint runs. Signed out
+  // meanwhile: the 401 stands, nothing is sent again.
+  if (response.status === 401 && provider && grant) {
+    grant = await getAccessGrant(provider, true);
+    if (grant) response = await send(url, options, grant);
   }
 
   return readResponse<T>(url, response);
 }
 
-async function getAccessToken(provider: AccessTokenProvider, forceRefresh: boolean): Promise<string | null> {
+async function getAccessGrant(provider: AccessTokenProvider, forceRefresh: boolean): Promise<AccessGrant | null> {
   try {
-    return await provider.getAccessToken(forceRefresh ? { forceRefresh } : undefined);
+    return await provider.getAccessGrant(forceRefresh ? { forceRefresh } : undefined);
   } catch (error) {
     // Never includes the token; the AuthFlowError in `cause` says why.
     throw new ApiError('auth', 'Could not get an access token.', undefined, undefined, error);
   }
 }
 
-async function send(url: string, options: RequestOptions, accessToken: string | null): Promise<Response> {
+async function send(url: string, options: RequestOptions, grant: AccessGrant | null): Promise<Response> {
+  // Checked synchronously right before fetch, so nothing can end the session
+  // between this check and the request leaving with its token.
+  if (grant && !grant.isCurrent()) {
+    const cause = new AuthFlowError('session-changed', 'Session ended before sending');
+    throw new ApiError('auth', 'The session ended before the request was sent.', undefined, undefined, cause);
+  }
+  const accessToken = grant?.accessToken ?? null;
+
   // fetch has no built-in timeout; abort it ourselves so a phone that cannot
   // reach the PC shows an error instead of spinning forever.
   const controller = new AbortController();

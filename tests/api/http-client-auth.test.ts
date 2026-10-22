@@ -5,9 +5,15 @@ import { afterEach, describe, mock, test } from 'node:test';
 
 import { classifyCurrentUserError, fetchCurrentUser } from '../../src/api/current-user';
 import { describeError } from '../../src/api/error-messages';
-import { ApiError, canSendBearerToken, setAccessTokenProvider, type AccessTokenProvider } from '../../src/api/http-client';
+import {
+  ApiError,
+  canSendBearerToken,
+  setAccessTokenProvider,
+  type AccessGrant,
+  type AccessTokenProvider,
+} from '../../src/api/http-client';
 import { liveApi } from '../../src/api/live-api';
-import { AuthController } from '../../src/auth/auth-controller';
+import { AuthController, type AuthControllerDeps } from '../../src/auth/auth-controller';
 import { AuthFlowError } from '../../src/auth/auth-errors';
 import { readIdTokenUser } from '../../src/auth/id-token';
 import { NOW_MS, TEST_CLIENT_ID, makeIdToken } from '../support/entra-fixtures';
@@ -30,13 +36,19 @@ function headersOf(fetchMock: ReturnType<typeof stubFetch>, index = 0): Record<s
   return (fetchMock.mock.calls[index].arguments[1] as RequestInit).headers as Record<string, string>;
 }
 
+/** A grant whose session is still current, as the AuthController hands out. */
+function grant(accessToken: string, isCurrent = () => true): AccessGrant {
+  return { accessToken, isCurrent };
+}
+
 function provider(tokens: (string | null)[]): AccessTokenProvider & { calls: ({ forceRefresh?: boolean } | undefined)[] } {
   const calls: ({ forceRefresh?: boolean } | undefined)[] = [];
   return {
     calls,
-    async getAccessToken(options) {
+    async getAccessGrant(options?: { forceRefresh?: boolean }) {
       calls.push(options);
-      return tokens[Math.min(calls.length - 1, tokens.length - 1)];
+      const token = tokens[Math.min(calls.length - 1, tokens.length - 1)];
+      return token === null ? null : grant(token);
     },
   };
 }
@@ -100,7 +112,7 @@ describe('401 from the API', () => {
 
 describe('token renewal failures', () => {
   test('an expired session becomes an ApiError the screens already handle, with a Danish message', async () => {
-    setAccessTokenProvider({ getAccessToken: async () => Promise.reject(new AuthFlowError('session-expired', 'x')) });
+    setAccessTokenProvider({ getAccessGrant: async () => Promise.reject(new AuthFlowError('session-expired', 'x')) });
     const fetchMock = stubFetch([200]);
     await assert.rejects(liveApi.getRooms(), (error: unknown) => {
       assert.ok(error instanceof ApiError);
@@ -183,53 +195,170 @@ describe('GET /api/me', () => {
   });
 });
 
-describe('logout while a request is renewing the token', () => {
+describe('a request never changes identity while it waits for its token', () => {
   const HOUR = 60 * 60 * 1000;
+  const USER_A = { oid: 'aaaaaaaa-0000-4000-8000-00000000000a', name: 'Anna' };
+  const USER_B = { oid: 'bbbbbbbb-0000-4000-8000-00000000000b', name: 'Bo' };
+  const booking = {
+    roomId: 1,
+    title: 'Planning',
+    bookedBy: 'Anna',
+    startUtc: '2031-03-12T08:00:00.000Z',
+    endUtc: '2031-03-12T09:00:00.000Z',
+  };
 
-  function signedInController(store: MemoryStore, clock: { now: number }) {
-    let refreshed = 100;
-    const controller = AuthController.create({
+  /** Each login is the next user in `users`; tokens are named after the user. */
+  function controllerFor(
+    users: { oid: string; name: string }[],
+    store: MemoryStore,
+    clock: { now: number },
+    refresh?: AuthControllerDeps['refresh'],
+  ) {
+    let login = 0;
+    let refreshed = 0;
+    return AuthController.create({
       store,
       authorize: async () => ({ type: 'success', code: 'code-from-entra', codeVerifier: 'verifier-1' }),
-      redeemCode: async () => ({
-        accessToken: 'fake-access-1',
-        accessTokenExpiresAt: clock.now + HOUR,
-        refreshToken: 'fake-refresh-1',
-        idToken: makeIdToken(),
-      }),
-      refresh: async () => ({
-        accessToken: `fake-access-${++refreshed}`,
-        accessTokenExpiresAt: clock.now + HOUR,
-        refreshToken: `fake-refresh-${refreshed}`,
-        idToken: makeIdToken(),
-      }),
+      redeemCode: async () => {
+        const user = users[login++];
+        return {
+          accessToken: `fake-access-${user.name}`,
+          accessTokenExpiresAt: clock.now + HOUR,
+          refreshToken: `fake-refresh-${user.name}`,
+          idToken: makeIdToken({ oid: user.oid, name: user.name }),
+        };
+      },
+      refresh:
+        refresh ??
+        (async (refreshToken) => ({
+          accessToken: `${refreshToken.replace('refresh', 'access')}-renewed-${++refreshed}`,
+          accessTokenExpiresAt: clock.now + HOUR,
+          refreshToken: `${refreshToken}-${refreshed}`,
+        })),
       readUser: (idToken) => readIdTokenUser(idToken, { clientId: TEST_CLIENT_ID, requiredTenantId: null, nowMs: clock.now }),
       now: () => clock.now,
     });
-    return controller;
   }
 
-  test('the request that triggered the renewal, and every later one, goes out without the old token', async () => {
+  async function signedInAsAnna(refresh?: AuthControllerDeps['refresh']) {
     const clock = { now: NOW_MS };
     const store = new MemoryStore();
-    const controller = signedInController(store, clock);
+    const controller = controllerFor([USER_A, USER_B], store, clock, refresh);
     await controller.start();
     await controller.signIn();
     setAccessTokenProvider(controller);
-    const fetchMock = stubFetch([200]);
+    return { clock, store, controller };
+  }
+
+  async function rejectsAsSessionChanged(promise: Promise<unknown>) {
+    await assert.rejects(promise, (error: unknown) => {
+      assert.ok(error instanceof ApiError, String(error));
+      assert.equal(error.kind, 'auth');
+      assert.ok(error.cause instanceof AuthFlowError && error.cause.kind === 'session-changed');
+      assert.match(describeError(error), /ikke udført, fordi du loggede ud eller skiftede konto/);
+      return true;
+    });
+  }
+
+  test('logout while a booking waits for its token: the booking is not sent, not even anonymously', async () => {
+    const { clock, store, controller } = await signedInAsAnna();
+    const fetchMock = stubFetch([201], { id: 1 });
 
     clock.now += HOUR;
     const write = store.hold('set');
-    const request = liveApi.getRooms();
+    const pending = liveApi.createBooking(booking);
     await until(() => store.waiting.set > 0, 'the renewal is saving the rotated refresh token');
     const signingOut = controller.signOut();
     write.release();
-    await request;
-    await signingOut;
-    await liveApi.getRooms();
 
-    assert.equal(fetchMock.mock.callCount(), 2);
-    assert.equal(headersOf(fetchMock, 0).Authorization, undefined, 'sent after logout with the renewed token');
-    assert.equal(headersOf(fetchMock, 1).Authorization, undefined);
+    await rejectsAsSessionChanged(pending);
+    await signingOut;
+    assert.equal(fetchMock.mock.callCount(), 0, 'no POST /api/bookings left the app');
+  });
+
+  test('an ordinary anonymous booking after the logout still works, without a token', async () => {
+    const { clock, store, controller } = await signedInAsAnna();
+    const fetchMock = stubFetch([201], { id: 1 });
+    clock.now += HOUR;
+    const write = store.hold('set');
+    const pending = liveApi.createBooking(booking);
+    await until(() => store.waiting.set > 0, 'the renewal is saving');
+    const signingOut = controller.signOut();
+    write.release();
+    await rejectsAsSessionChanged(pending);
+    await signingOut;
+
+    // Started while signed out: anonymous, exactly as without login.
+    await liveApi.createBooking(booking);
+
+    assert.equal(fetchMock.mock.callCount(), 1);
+    assert.equal(headersOf(fetchMock).Authorization, undefined);
+  });
+
+  test('logout and login as another user while a booking waits: sent neither as Anna nor as Bo', async () => {
+    const { clock, store, controller } = await signedInAsAnna();
+    const fetchMock = stubFetch([201], { id: 1 });
+
+    clock.now += HOUR;
+    const write = store.hold('set');
+    const pending = liveApi.createBooking(booking);
+    await until(() => store.waiting.set > 0, "Anna's renewal is saving");
+    const signingOut = controller.signOut();
+    const signingIn = controller.signIn();
+    await until(() => controller.getState().status === 'signed-in', 'Bo has signed in');
+    const state = controller.getState();
+    assert.equal(state.status === 'signed-in' && state.user.name, 'Bo');
+    write.release();
+
+    await rejectsAsSessionChanged(pending);
+    await Promise.all([signingOut, signingIn]);
+    assert.equal(fetchMock.mock.callCount(), 0);
+
+    // Bo's own booking carries Bo's token.
+    await liveApi.createBooking({ ...booking, bookedBy: 'Bo' });
+    assert.equal(headersOf(fetchMock).Authorization, 'Bearer fake-access-Bo');
+  });
+
+  test('a renewal that fails after logout aborts the request instead of sending it anonymously', async () => {
+    let rejectRefresh: ((error: unknown) => void) | undefined;
+    const { clock, controller } = await signedInAsAnna(
+      () => new Promise((_resolve, reject) => (rejectRefresh = reject)),
+    );
+    const fetchMock = stubFetch([201], { id: 1 });
+
+    clock.now += HOUR;
+    const pending = liveApi.createBooking(booking);
+    await until(() => rejectRefresh !== undefined, 'the renewal is waiting for Entra');
+    await controller.signOut();
+    rejectRefresh?.(new AuthFlowError('network', 'offline'));
+
+    await rejectsAsSessionChanged(pending);
+    assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  test('a grant whose session ended just before sending is not sent', async () => {
+    let current = true;
+    setAccessTokenProvider({ getAccessGrant: async () => grant('fake-access-Anna', () => current) });
+    const fetchMock = stubFetch([201], { id: 1 });
+    current = false;
+
+    await rejectsAsSessionChanged(liveApi.createBooking(booking));
+    assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  test('a 401 whose forced renewal overlaps a logout is not sent again, by anyone', async () => {
+    const { store, controller } = await signedInAsAnna();
+    const fetchMock = stubFetch([401, 201], { id: 1 });
+
+    const write = store.hold('set');
+    const pending = liveApi.createBooking(booking);
+    await until(() => store.waiting.set > 0, 'the forced renewal after the 401 is saving');
+    const signingOut = controller.signOut();
+    write.release();
+
+    await rejectsAsSessionChanged(pending);
+    await signingOut;
+    assert.equal(fetchMock.mock.callCount(), 1, "only the first, rejected attempt with Anna's token");
+    assert.equal(headersOf(fetchMock).Authorization, 'Bearer fake-access-Anna');
   });
 });

@@ -1,9 +1,10 @@
 // The app's login state and the only place that holds tokens. Screens read
 // `state` (which never contains a token) and call signIn/signOut; the HTTP
-// client asks getAccessToken() for every request to the API.
+// client asks getAccessGrant() for every request to the API.
 //
 // No React and no Expo imports: the browser login, the token endpoint and
 // the secure storage are passed in, so the whole flow runs in the Node tests.
+import type { AccessGrant, AccessTokenProvider } from '../api/http-client';
 import { AuthFlowError, describeAuthError, isAuthFlowError } from './auth-errors';
 import type { AuthUser } from './id-token';
 import { clearSession, loadSession, saveSession, type KeyValueStore } from './session-storage';
@@ -52,7 +53,7 @@ interface LiveSession {
 
 type Listener = (state: AuthState) => void;
 
-export class AuthController {
+export class AuthController implements AccessTokenProvider {
   private state: AuthState;
   private readonly listeners = new Set<Listener>();
   private session: LiveSession | null = null;
@@ -184,43 +185,49 @@ export class AuthController {
   }
 
   /**
-   * A valid access token for the API, or null when nobody is signed in.
-   * Renews it when it is about to expire; concurrent callers share one
-   * renewal. Throws AuthFlowError when a signed-in user's token cannot be
-   * renewed (offline, or the session has expired and the user is now
-   * signed out).
+   * The access token for a request, bound to the session that is current
+   * when the request asks, or null when nobody is signed in (the request is
+   * then anonymous, as without login).
    *
-   * The token returned always belongs to the session that is current when
-   * this method returns: if the user signs out (or out and in again) while
-   * a renewal is running, its result is thrown away and the current state
-   * decides (no token, or the new session's).
+   * Renews the token when it is about to expire; concurrent callers share
+   * one renewal. A request never changes identity while it waits: if the
+   * user signs out, or out and in as someone else, before the renewal is
+   * done, this throws AuthFlowError('session-changed') and the request is
+   * not sent, neither as the new user nor anonymously. It also throws when
+   * the token cannot be renewed (offline, or the session has expired).
+   *
+   * `isCurrent()` lets the HTTP client check, right before sending, that the
+   * session has not ended in the meantime.
    */
-  async getAccessToken(options: { forceRefresh?: boolean } = {}): Promise<string | null> {
-    if (!this.deps) return null;
-    let forceRefresh = options.forceRefresh === true;
+  async getAccessGrant(options: { forceRefresh?: boolean } = {}): Promise<AccessGrant | null> {
+    const session = this.session;
+    if (!this.deps || !session) return null;
+    const generation = this.generation;
+    const grant = (accessToken: string): AccessGrant => ({
+      accessToken,
+      isCurrent: () => this.generation === generation,
+    });
 
-    // A few rounds at most, in case logins and logouts keep overtaking the renewal.
-    for (let round = 0; round < 3; round++) {
-      const session = this.session;
-      if (!session) return null;
-      const generation = this.generation;
-
-      if (!forceRefresh && session.accessToken && session.accessTokenExpiresAt - this.now() > ACCESS_TOKEN_RENEWAL_MARGIN_MS) {
-        return session.accessToken;
-      }
-
-      try {
-        const accessToken = await this.renewal(generation, session);
-        if (generation === this.generation) return accessToken;
-      } catch (error) {
-        // The renewal itself ended this session (expired or revoked): the
-        // caller learns why. A logout or login from elsewhere: look again.
-        if (generation === this.generation || generation === this.expiredGeneration) throw error;
-      }
-      // Another session now. A forced renewal was meant for the old token.
-      forceRefresh = false;
+    if (!options.forceRefresh && session.accessToken && session.accessTokenExpiresAt - this.now() > ACCESS_TOKEN_RENEWAL_MARGIN_MS) {
+      return grant(session.accessToken);
     }
-    return null;
+
+    let accessToken: string | null;
+    try {
+      accessToken = await this.renewal(generation, session);
+    } catch (error) {
+      // The renewal itself found the session expired or revoked: say so.
+      if (generation === this.generation || generation === this.expiredGeneration) throw error;
+      throw sessionChanged();
+    }
+    // renew() returns null only when the session ended while it ran.
+    if (accessToken === null || generation !== this.generation) throw sessionChanged();
+    return grant(accessToken);
+  }
+
+  /** The token alone, for callers that send nothing (see getAccessGrant). */
+  async getAccessToken(options: { forceRefresh?: boolean } = {}): Promise<string | null> {
+    return (await this.getAccessGrant(options))?.accessToken ?? null;
   }
 
   /** The running renewal of this session, or a new one. Never shared across sessions. */
@@ -324,6 +331,10 @@ export class AuthController {
     this.state = state;
     for (const listener of this.listeners) listener(state);
   }
+}
+
+function sessionChanged(): AuthFlowError {
+  return new AuthFlowError('session-changed', 'The session ended while the request waited for its token');
 }
 
 function errorNotice(error: unknown): AuthNotice {

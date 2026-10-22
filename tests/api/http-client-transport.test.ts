@@ -27,9 +27,9 @@ afterEach(() => {
 function trackingProvider() {
   const calls: unknown[] = [];
   const provider: AccessTokenProvider = {
-    async getAccessToken(options) {
+    async getAccessGrant(options?: { forceRefresh?: boolean }) {
       calls.push(options);
-      return 'fake-access-1';
+      return { accessToken: 'fake-access-1', isCurrent: () => true };
     },
   };
   return { provider, calls };

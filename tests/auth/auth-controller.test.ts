@@ -73,6 +73,11 @@ function setup(options: Partial<Pick<AuthControllerDeps, 'authorize' | 'redeemCo
   return { controller, store, states, authorize, redeemCode, refresh };
 }
 
+/** A request that waited through a logout (or logout + login) must be aborted, never served. */
+async function rejectsSessionChanged(promise: Promise<unknown>): Promise<void> {
+  await assert.rejects(promise, (error: unknown) => error instanceof AuthFlowError && error.kind === 'session-changed');
+}
+
 async function signedIn(fake: Fake = setup()): Promise<Fake> {
   await fake.controller.start();
   await fake.controller.signIn();
@@ -363,7 +368,7 @@ describe('signOut', () => {
     await fake.controller.signOut();
     pending.resolve(tokens(42));
 
-    assert.equal(await inFlight, null);
+    await rejectsSessionChanged(inFlight);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(fake.controller.getState().status, 'signed-out');
     assert.equal(fake.store.values.size, 0);
@@ -406,7 +411,7 @@ describe('signOut', () => {
 // is waiting for SecureStore or for Entra. The store's hold() stops an
 // operation half-way, so each test fixes the exact order of the steps.
 describe('races between logout, login and renewal', () => {
-  test('logout while the rotated refresh token is being saved: the renewal hands out no token', async () => {
+  test('logout while the rotated refresh token is being saved: the waiting request is aborted, gets no token', async () => {
     const fake = await signedIn();
     clock.now += HOUR;
     const write = fake.store.hold('set');
@@ -418,14 +423,14 @@ describe('races between logout, login and renewal', () => {
     const signingOut = fake.controller.signOut();
     write.release();
 
-    assert.equal(await renewal, null, 'the token renewed before the logout must not be handed out');
+    await rejectsSessionChanged(renewal);
     await signingOut;
     assert.equal(await fake.controller.getAccessToken(), null);
     assert.equal(fake.controller.getState().status, 'signed-out');
     assert.equal(fake.store.values.size, 0, 'the save finished before the clear, so nothing is left');
   });
 
-  test('several requests waiting for that renewal all get no token', async () => {
+  test('several requests waiting for that renewal are all aborted', async () => {
     const fake = await signedIn();
     clock.now += HOUR;
     const write = fake.store.hold('set');
@@ -435,11 +440,11 @@ describe('races between logout, login and renewal', () => {
     const signingOut = fake.controller.signOut();
     write.release();
 
-    assert.deepEqual(await Promise.all(waiting), [null, null]);
+    for (const request of waiting) await rejectsSessionChanged(request);
     await signingOut;
   });
 
-  test('logout and a new login while the old renewal is saving: the old token is never handed out', async () => {
+  test('logout and login as someone else while the old renewal is saving: the waiting request gets neither token', async () => {
     const fake = await signedIn();
     clock.now += HOUR;
     const write = fake.store.hold('set');
@@ -451,15 +456,16 @@ describe('races between logout, login and renewal', () => {
     await until(() => fake.controller.getState().status === 'signed-in', 'the new login has finished');
     write.release();
 
-    // The caller asked while the old session was current; it gets the new session's token.
-    assert.equal(await renewal, 'fake-access-2');
+    // The caller asked as the old user: it must not continue as the new one.
+    await rejectsSessionChanged(renewal);
     await Promise.all([signingOut, signingIn]);
+    // A new request, started by the new session, gets the new token.
     assert.equal(await fake.controller.getAccessToken(), 'fake-access-2');
     assert.deepEqual(fake.controller.getState(), { status: 'signed-in', user: storedUser });
     assert.equal((await loadSession(fake.store))?.refreshToken, 'fake-refresh-2');
   });
 
-  test('a renewal that fails after logout lets the request go ahead without a token instead of failing', async () => {
+  test('a renewal that fails after logout aborts the request instead of sending it without a token', async () => {
     const pending = deferred<TokenSet>();
     const fake = await signedIn(setup({ refresh: () => pending.promise }));
     clock.now += HOUR;
@@ -468,8 +474,32 @@ describe('races between logout, login and renewal', () => {
     await fake.controller.signOut();
     pending.reject(new AuthFlowError('network', 'offline'));
 
-    assert.equal(await renewal, null);
+    await rejectsSessionChanged(renewal);
     assert.equal(fake.controller.getState().status, 'signed-out');
+  });
+
+  test('a grant handed out before logout reports that its session has ended', async () => {
+    const fake = await signedIn();
+    const grant = await fake.controller.getAccessGrant();
+    assert.equal(grant?.accessToken, 'fake-access-1');
+    assert.equal(grant?.isCurrent(), true);
+
+    await fake.controller.signOut();
+    assert.equal(grant?.isCurrent(), false);
+    await fake.controller.signIn();
+    assert.equal(grant?.isCurrent(), false, 'not current again for the next session either');
+  });
+
+  test('nobody signed in when the request starts: no grant, the request is anonymous', async () => {
+    const fake = setup();
+    await fake.controller.start();
+    assert.equal(await fake.controller.getAccessGrant(), null);
+  });
+
+  test('the session expiring during the renewal is still reported as expired, not as changed', async () => {
+    const fake = await signedIn(setup({ refresh: async () => Promise.reject(oauthError('invalid_grant', 'AADSTS700082: expired')) }));
+    clock.now += HOUR;
+    await assert.rejects(fake.controller.getAccessGrant(), (error: unknown) => error instanceof AuthFlowError && error.kind === 'session-expired');
   });
 
   test('a delete that fails after a new login does not overwrite the new login', async () => {

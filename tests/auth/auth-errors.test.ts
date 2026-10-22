@@ -42,7 +42,7 @@ describe('describeAuthError', () => {
   test('every kind has a Danish message', () => {
     const kinds: AuthFlowError['kind'][] = [
       'cancelled', 'access-denied', 'consent-required', 'configuration', 'state-mismatch', 'session-expired',
-      'network', 'timeout', 'invalid-response', 'server', 'storage', 'busy', 'unknown',
+      'network', 'timeout', 'invalid-response', 'server', 'storage', 'busy', 'session-changed', 'unknown',
     ];
     for (const kind of kinds) {
       const message = describeAuthError(new AuthFlowError(kind, 'x'));

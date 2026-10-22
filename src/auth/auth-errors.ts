@@ -26,6 +26,12 @@ export type AuthErrorKind =
   | 'storage'
   /** Another login is still open. */
   | 'busy'
+  /**
+   * The user signed out, or out and in as someone else, while a request was
+   * waiting for its token. The request is not sent: neither as the new
+   * user nor anonymously.
+   */
+  | 'session-changed'
   | 'unknown';
 
 export class AuthFlowError extends Error {
@@ -151,6 +157,8 @@ export function describeAuthError(error: unknown): string {
       return 'Login-sessionen kunne ikke læses eller gemmes sikkert på enheden.';
     case 'busy':
       return 'Et login er allerede i gang.';
+    case 'session-changed':
+      return 'Handlingen blev ikke udført, fordi du loggede ud eller skiftede konto, mens den ventede. Prøv igen.';
     case 'unknown':
       return `Login mislykkedes${code}. Prøv igen.`;
   }
