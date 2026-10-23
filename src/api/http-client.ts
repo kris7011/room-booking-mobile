@@ -86,6 +86,8 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   query?: Record<string, QueryValue>;
   body?: unknown;
+  /** Extra request headers, e.g. Idempotency-Key. Never Authorization: that comes from the token provider. */
+  headers?: Record<string, string>;
 }
 
 export function buildUrl(path: string, query?: Record<string, QueryValue>): string {
@@ -165,6 +167,7 @@ async function send(url: string, options: RequestOptions, grant: AccessGrant | n
     return await fetch(url, {
       method: options.method ?? 'GET',
       headers: {
+        ...options.headers,
         Accept: 'application/json',
         ...(options.body !== undefined && { 'Content-Type': 'application/json' }),
         ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
