@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import type { ServerIdentity } from '../api/current-user';
+import { describeOrganizationAccess, type ServerIdentity } from '../api/current-user';
+import type { RegisteredUser } from '../models/current-user';
 import { describeUnavailable } from '../auth/auth-availability';
 import { useAuth } from '../auth/AuthProvider';
 import { isPersonalAccountTenant } from '../auth/entra-config';
@@ -85,15 +86,33 @@ function ServerIdentityLine({ identity, onRetry }: { identity: ServerIdentity | 
   switch (identity.status) {
     case 'checking':
       return <Text style={styles.caption}>Bekræfter login hos API'et…</Text>;
-    case 'verified': {
-      const { identity: me } = identity;
+    case 'registering':
       return (
-        <Text style={[styles.caption, styles.success]}>
-          Bekræftet af API'et som {me.displayName}
-          {me.user ? '' : ' (endnu ikke knyttet til en Room Booking-bruger)'}.
+        <View style={styles.row}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.caption}>Bekræftet af API'et. Opretter dig som bruger i Room Booking…</Text>
+        </View>
+      );
+    case 'registered':
+      return <RegisteredUserSummary user={identity.user} registeredNow={identity.registeredNow} />;
+    case 'registration-unsupported':
+      return (
+        <Text style={styles.caption}>
+          Bekræftet af API'et som {identity.identity.displayName}, men API'et understøtter endnu ikke registrering af
+          brugere (/api/me/registration mangler).
         </Text>
       );
-    }
+    case 'registration-failed':
+      return (
+        <View style={styles.row}>
+          <Text style={[styles.caption, styles.error, styles.flex]}>
+            Bekræftet af API'et, men du kunne ikke oprettes som bruger i Room Booking. {identity.message}
+          </Text>
+          <Text style={styles.link} accessibilityRole="button" onPress={onRetry}>
+            Prøv igen
+          </Text>
+        </View>
+      );
     case 'unsupported':
       return <Text style={styles.caption}>API'et understøtter endnu ikke login (/api/me mangler).</Text>;
     case 'not-configured':
@@ -118,6 +137,29 @@ function ServerIdentityLine({ identity, onRetry }: { identity: ServerIdentity | 
   }
 }
 
+// Registered: says so plainly, shows the user ID an operator needs, and
+// either the organisations or what to do without one.
+function RegisteredUserSummary({ user, registeredNow }: { user: RegisteredUser; registeredNow: boolean }) {
+  const access = describeOrganizationAccess(user);
+  const hasOrganization = user.organizations.length > 0;
+  return (
+    <View style={styles.registered} testID="registration-status">
+      <Text style={[styles.caption, styles.success]} accessibilityLiveRegion="polite">
+        {registeredNow
+          ? `✓ Du er nu registreret i Room Booking som ${user.displayName}.`
+          : `✓ Registreret i Room Booking som ${user.displayName}.`}
+      </Text>
+      <View style={[styles.notice, hasOrganization ? null : styles.onboarding]} testID="organization-access">
+        <Text style={styles.noticeTitle}>{access.title}</Text>
+        <Text style={styles.caption}>{access.detail}</Text>
+      </View>
+      <Text style={styles.caption} selectable>
+        Bruger-ID: {user.publicId}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   panel: {
     borderRadius: radius.md,
@@ -137,4 +179,8 @@ const styles = StyleSheet.create({
   warning: { color: colors.warning },
   error: { color: colors.danger },
   link: { ...typography.label, color: colors.primary },
+  registered: { gap: spacing.sm },
+  notice: { borderRadius: radius.sm, backgroundColor: colors.surfaceMuted, padding: spacing.sm, gap: spacing.xs },
+  onboarding: { backgroundColor: colors.warningSoft },
+  noticeTitle: { ...typography.label, color: colors.text },
 });
