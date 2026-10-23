@@ -184,7 +184,7 @@ For a release build, a second registration (or a second redirect URI) with the r
 | 3 | Close the Custom Tab without signing in | *Login blev annulleret.*, no error |
 | 4 | Live mode with the API from PR #9 over `adb reverse` (see [above](#testing-login-against-the-api-on-a-physical-phone)) | First login: *Du er nu registreret i Room Booking som …*, *Du er ikke medlem af en organisation endnu* and a Bruger-ID; the API log shows `Registered user {id}` and no 401 |
 | 4a | Close the app completely, start it again (or **Log ud** and log in with the same account) | *Registreret i Room Booking som …* with the **same** Bruger-ID; the API log shows no new `Registered user` line |
-| 4c | Set `Organizations__InitialLegacyOwnerUserId` to the Bruger-ID, restart the API, then tap *Prøv igen* or restart the app | *Din organisation*: *Legacy (standardorganisation) · Ejer*; the API log says the user is now the first Owner |
+| 4c | Set `Organizations__InitialLegacyOwnerUserId` to the Bruger-ID, restart the API, then close the app completely and open it again | *Din organisation*: *Legacy (standardorganisation) · Ejer*; the API log says the user is now the first Owner |
 | 4b | The same API over Wi-Fi (`http://<LAN IP>:5003`) | Search and booking work; the panel says the token is not sent over an insecure connection; the API log shows no `Authorization` header |
 | 5 | Close the app completely and start it again | Still signed in, without a new browser login |
 | 6 | Leave the app for more than an hour (or until the access token expires), then search | The search works; the token was renewed silently |
