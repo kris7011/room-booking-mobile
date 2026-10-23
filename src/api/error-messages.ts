@@ -1,3 +1,4 @@
+import { describeAuthError } from '../auth/auth-errors';
 import { apiBaseUrl } from '../config/env';
 import { ApiError } from './http-client';
 
@@ -34,6 +35,9 @@ export function describeError(error: unknown): string {
       return "API'et returnerede et svar, appen ikke kunne læse.";
     case 'not-configured':
       return 'EXPO_PUBLIC_API_URL er ikke sat.';
+    case 'auth':
+      // The access token could not be renewed: offline, or the session expired.
+      return describeAuthError(error.cause);
     case 'http':
       return describeHttpError(error);
   }
@@ -57,6 +61,13 @@ function describeHttpError(error: ApiError): string {
   const fieldErrors = Object.values(error.problem?.errors ?? {}).flat();
   if (error.status === 400 && fieldErrors.length > 0) {
     return `Ugyldige oplysninger: ${fieldErrors.join(' ')}`;
+  }
+
+  if (error.status === 401) {
+    return "API'et kræver login, eller din session er udløbet. Log ind med Microsoft og prøv igen.";
+  }
+  if (error.status === 403) {
+    return error.problem?.detail ?? 'Din konto har ikke adgang til denne handling.';
   }
 
   if (error.status !== undefined && error.status >= 500) {
