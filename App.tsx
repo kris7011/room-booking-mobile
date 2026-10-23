@@ -3,7 +3,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from './src/auth/AuthProvider';
 import { logAuthRedirectUri } from './src/auth/redirect-uri';
-import { HomeScreen } from './src/screens/HomeScreen';
+import { SessionProvider } from './src/organizations/SessionProvider';
+import { AppScreens } from './src/screens/AppScreens';
 
 // Development only: shows in the Metro terminal which redirect URI the
 // Microsoft login uses (roombookingdev://auth in the Android development
@@ -15,7 +16,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <HomeScreen />
+        {/* The API's view of the signed-in user and their organisations. */}
+        <SessionProvider>
+          <AppScreens />
+        </SessionProvider>
       </AuthProvider>
       <StatusBar style="dark" />
     </SafeAreaProvider>

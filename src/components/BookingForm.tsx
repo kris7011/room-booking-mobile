@@ -2,7 +2,7 @@ import { useRef, useState, type ComponentPropsWithRef } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
 
 import { describeError, isStartNotInFutureError } from '../api/error-messages';
-import { roomBookingApi } from '../api/room-booking-api';
+import type { RoomBookingApi } from '../api/room-booking-api';
 import { MAX_BOOKED_BY_LENGTH, MAX_TITLE_LENGTH, type BookingDraft, type BookingResponse } from '../models/booking';
 import type { MeetingRoom } from '../models/room';
 import { colors, radius, spacing, typography } from '../theme/theme';
@@ -20,6 +20,8 @@ export interface StartedBookingNotice {
 
 /** What the screen provides to the booking form, whichever room is open. */
 export interface BookingFormContext {
+  /** Where the booking is made: the chosen organisation's API, or demo data. */
+  api: RoomBookingApi;
   /** Title and name, kept by the screen so a new search does not lose them. */
   draft: BookingDraft;
   onDraftChange: (draft: BookingDraft) => void;
@@ -40,6 +42,7 @@ interface BookingFormProps extends BookingFormContext {
 }
 
 export function BookingForm({
+  api,
   room,
   start,
   end,
@@ -76,7 +79,7 @@ export function BookingForm({
     setSubmitting(true);
     setError(null);
     try {
-      const booking = await roomBookingApi.createBooking({
+      const booking = await api.createBooking({
         roomId: room.id,
         title: title.trim(),
         bookedBy: bookedBy.trim(),

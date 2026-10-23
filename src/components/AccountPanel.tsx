@@ -1,20 +1,20 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { describeOrganizationAccess, type ServerIdentity } from '../api/current-user';
+import type { ServerIdentity } from '../api/current-user';
 import type { RegisteredUser } from '../models/current-user';
 import { describeUnavailable } from '../auth/auth-availability';
 import { useAuth } from '../auth/AuthProvider';
 import { isPersonalAccountTenant } from '../auth/entra-config';
 import { apiBaseUrl, isDemoMode } from '../config/env';
-import { useServerIdentity } from '../hooks/useServerIdentity';
+import { useSession } from '../organizations/SessionProvider';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { PrimaryButton } from './PrimaryButton';
 
-// Login status and the Microsoft login/logout button. Login is optional:
-// searching and booking work the same without it.
+// Login status and the Microsoft login/logout button. The organisations the
+// user belongs to are shown by the OrganizationPanel below it.
 export function AccountPanel() {
   const { state, signIn, signOut } = useAuth();
-  const { identity, recheck } = useServerIdentity(state.status === 'signed-in' ? state.user : null);
+  const { identity, recheckIdentity: recheck } = useSession();
 
   if (state.status === 'unavailable') {
     return (
@@ -62,7 +62,7 @@ export function AccountPanel() {
       <Text style={styles.caption}>
         {isDemoMode
           ? 'Du kan bruge demoen uden login. Log ind for at afprøve Microsoft-login på telefonen.'
-          : 'Du kan søge og booke uden login. Log ind, så API\'et kan se, hvem du er.'}
+          : 'Log ind med Microsoft for at se og booke i din organisations mødelokaler.'}
       </Text>
       {notice ? (
         <Text
@@ -121,7 +121,7 @@ function ServerIdentityLine({ identity, onRetry }: { identity: ServerIdentity | 
       return (
         <Text style={[styles.caption, styles.warning]}>
           Login-tokenet sendes ikke til {apiBaseUrl}, fordi forbindelsen ikke er sikker. Brug HTTPS, eller i udvikling
-          localhost via adb reverse (se README). Søgning og booking virker uden login.
+          localhost via adb reverse (se README).
         </Text>
       );
     case 'rejected':
@@ -137,11 +137,9 @@ function ServerIdentityLine({ identity, onRetry }: { identity: ServerIdentity | 
   }
 }
 
-// Registered: says so plainly, shows the user ID an operator needs, and
-// either the organisations or what to do without one.
+// Registered: says so plainly and shows the user ID an operator needs. The
+// organisations are in the OrganizationPanel.
 function RegisteredUserSummary({ user, registeredNow }: { user: RegisteredUser; registeredNow: boolean }) {
-  const access = describeOrganizationAccess(user);
-  const hasOrganization = user.organizations.length > 0;
   return (
     <View style={styles.registered} testID="registration-status">
       <Text style={[styles.caption, styles.success]} accessibilityLiveRegion="polite">
@@ -149,10 +147,6 @@ function RegisteredUserSummary({ user, registeredNow }: { user: RegisteredUser; 
           ? `✓ Du er nu registreret i Room Booking som ${user.displayName}.`
           : `✓ Registreret i Room Booking som ${user.displayName}.`}
       </Text>
-      <View style={[styles.notice, hasOrganization ? null : styles.onboarding]} testID="organization-access">
-        <Text style={styles.noticeTitle}>{access.title}</Text>
-        <Text style={styles.caption}>{access.detail}</Text>
-      </View>
       <Text style={styles.caption} selectable>
         Bruger-ID: {user.publicId}
       </Text>
@@ -180,7 +174,4 @@ const styles = StyleSheet.create({
   error: { color: colors.danger },
   link: { ...typography.label, color: colors.primary },
   registered: { gap: spacing.sm },
-  notice: { borderRadius: radius.sm, backgroundColor: colors.surfaceMuted, padding: spacing.sm, gap: spacing.xs },
-  onboarding: { backgroundColor: colors.warningSoft },
-  noticeTitle: { ...typography.label, color: colors.text },
 });
