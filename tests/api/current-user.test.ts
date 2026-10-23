@@ -150,11 +150,11 @@ describe('verifyAndRegister', () => {
 });
 
 describe('organisation access', () => {
-  test('no organisation: onboarding that names invitations and the user ID', () => {
+  test('no organisation: onboarding that offers creating one or accepting an invitation', () => {
     const access = describeOrganizationAccess(USER);
     assert.equal(access.title, 'Du er ikke medlem af en organisation endnu');
-    assert.match(access.detail, /inviterer dig/);
-    assert.match(access.detail, /bruger-ID/);
+    assert.match(access.detail, /Opret din egen organisation/);
+    assert.match(access.detail, /invitation/);
   });
 
   test('memberships are listed with Danish role names', () => {
