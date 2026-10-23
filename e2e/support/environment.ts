@@ -57,12 +57,19 @@ export const OUTPUT_DIR = join(MOBILE_DIR, 'e2e', '.output');
  * Environment for an API process that uses the run's own database. The
  * Development environment is needed because the API only enables CORS there;
  * the allowed origin is replaced with the E2E web server's.
+ *
+ * The web app has no Microsoft login, so it uses the original /api/rooms and
+ * /api/bookings without a token. Since phase 3 the API only allows that in
+ * its anonymous demo mode (LegacyApi:AllowAnonymous, accepted in Development
+ * only); an older API ignores the setting. The run's own database holds no
+ * real organisation data.
  */
 export function backendEnvironment(port: number): Record<string, string> {
   return {
     ASPNETCORE_ENVIRONMENT: 'Development',
     ASPNETCORE_URLS: `http://localhost:${port}`,
     ConnectionStrings__BookingDatabase: `Data Source=${DATABASE_PATH}`,
+    LegacyApi__AllowAnonymous: 'true',
     Cors__AllowedOrigins__0: WEB_URL,
     Logging__LogLevel__Default: 'Warning',
     DOTNET_NOLOGO: '1',

@@ -13,6 +13,7 @@ The app runs without a backend on clearly labelled demo data, and switches to th
 - Loading, error, "no free rooms" and success states.
 - Booking form with client-side validation that matches the API's rules. A meeting whose start passes while the form is open cannot be confirmed; the form offers to search again from the next possible time and keeps what was typed.
 - Readable messages for API errors such as overlapping bookings (409) and validation errors (400).
+- Organisations (signed in, Android and iOS): choose the active organisation and see your role, switch between your organisations, create your own, accept an invitation by code or link, and, as Owner or Admin, manage rooms, members and invitations. Rooms and bookings always belong to the chosen organisation. See [Organisations](#organisations).
 - Optional Microsoft Entra ID login on Android and iOS: authorization code flow with PKCE, refresh token in SecureStore, silent renewal, logout, and the identity confirmed by the API. See [Microsoft Entra login](#microsoft-entra-login).
 - One code base for Android, iOS and web. Only web has been tested so far, see [Platform status](#platform-status).
 
@@ -222,6 +223,42 @@ adb logcat -s ReactNativeJS:V | Select-String '\[auth\]'
 
 The app never sends `domain_hint` or `login_hint`: on `/common`, Microsoft decides from the e-mail address whether it is a personal or a work or school account, and a hint would shut out the other kind.
 
+## Organisations
+
+Needs the API with organisations (kris7011/meeting-room-booking PRs #10, #11 and #12) and a signed-in, registered user. Everything below is in Danish in the app.
+
+### What the user sees
+
+- **Aktiv organisation**: name, "(standardorganisation)" for the legacy organisation, and the user's role (*Ejer*, *Administrator*, *Medlem*). With several organisations, chips switch between them. The choice is remembered per user in SecureStore and restored on the next start.
+- **No organisation yet**: onboarding with *Opret organisation* and *Har en invitation*.
+- **Opret organisation**: a name and the button. The new organisation becomes active, with the user as Owner. A random `Idempotency-Key` is made per name, so tapping again after a timeout repeats the same request and never creates two organisations.
+- **Accepter invitation**: paste the code, the link, or the whole message containing it. Clear messages for an expired or revoked invitation, the wrong account (`invitation_email_mismatch`), a missing verified e-mail and missing rights.
+- **Booking**: search, the booking form and *Kommende bookinger* use `/api/organizations/{id}/…` of the active organisation only. Members see *Slet* only on their own bookings (`canModify`); the API checks every change again.
+- **Administrer organisation** (Owners and Admins only): details and counts, renaming (Owners; never the legacy organisation), rooms (create, edit, archive, restore), invitations (invite by e-mail, share the code and link, see and revoke open ones), members (Owners change roles and remove members; anyone can leave). Android's back button returns to booking.
+
+What the app shows is only a convenience: the API enforces every rule itself (see the API's README, *Organisation access control*).
+
+### Switching without stale data
+
+- The booking area is keyed by the active organisation, so a switch starts with an empty search, form and list.
+- Every request names the organisation in its path, so a late response can only ever describe the organisation it was asked for.
+- `OrganizationController` (`src/organizations/organization-controller.ts`, no React) drops a list that arrives after a newer one, or for a user who has since signed out.
+- Signing out clears the organisations; the next user never sees the previous user's list or choice.
+
+### Invitation links
+
+`roombookingdev://invitation?token=…` opens the app with the code filled in (React Native's `Linking`, with the scheme the development build already registers, so no new build is needed). The code is shown once after inviting and can be shared with Android's share sheet; it is never logged. Accepting still requires signing in with the invited e-mail address, whose verification Microsoft vouches for.
+
+Test it on the phone with the development build running:
+
+```powershell
+adb shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "roombookingdev://invitation?token=<code>" io.github.kris7011.roombooking.dev
+```
+
+### Without login
+
+On web (no Microsoft login) and when signed out, the app uses the original `/api/rooms` and `/api/bookings` without a token, as before. The API with organisations answers `401` there unless it runs in its anonymous demo mode (`LegacyApi:AllowAnonymous`, Development only); the app then says that login is required. The E2E tests start the API in that demo mode.
+
 ## Commands
 
 | Command | What it does |
@@ -255,6 +292,7 @@ src/
     demo-api.ts          In-memory demo implementation
     http-client.ts       fetch wrapper: base URL, query string, 10 s timeout, ApiError, bearer token
     current-user.ts      GET /api/me, POST /api/me/registration: verify, register once, organisation access
+    organizations-api.ts Organisation, room, member and invitation endpoints; booking per organisation
     error-messages.ts    Maps errors to user-facing (Danish) messages
   auth/
     auth-config.ts       Scheme, redirect URI and makeRedirectUri options
@@ -272,18 +310,23 @@ src/
     AuthProvider.tsx     React context and useAuth()
     redirect-uri.native.ts  Calls makeRedirectUri on Android/iOS; logs the URI in development
     redirect-uri.ts      Web: no redirect URI (Angular owns web login)
-  components/            Reusable UI: RoomCard, SearchForm, BookingForm, AccountPanel, pickers, …
+  components/            Reusable UI: RoomCard, SearchForm, BookingForm, BookingArea, UpcomingBookings, AccountPanel, pickers, …
+    organizations/       OrganizationPanel (switcher, onboarding), create organisation, accept invitation
+    admin/               Administration sections: details, rooms, invitations, members
   config/env.ts          Reads EXPO_PUBLIC_API_URL, decides demo or live mode
   hooks/useClock.tsx     Current time, renewed per half hour, at midnight and on AppState "active"
   hooks/useServerIdentity.tsx  Asks GET /api/me who the signed-in user is; registers them the first time
   models/                TypeScript types mirroring the API contracts
-  screens/HomeScreen.tsx The screen: owns state and calls the API
+  organizations/         OrganizationController (no React), permissions, invitation links, room form rules,
+                         Danish messages, SessionProvider (identity, organisations, invitation links)
+  screens/               AppScreens (booking or administration), HomeScreen, OrganizationAdminScreen
   theme/theme.ts         Colors, spacing and typography tokens
   utils/date-time.ts     Local-time helpers and local-to-UTC conversion
   utils/search-window.ts Default vs. chosen time, "passed" check and next possible time
   utils/clock.ts         When the shown time may be stale (timers + resume), testable in Node
 tests/
-  api/                   Demo API, live API client, error messages
+  api/                   Demo API, live API client, organisation endpoints, error messages
+  organizations/         Organisation choice and switching, permissions, invitation links, room form, messages
   auth/                  Redirect URI, Entra settings, login, tokens, session storage, errors
   config/                Environment handling, app.json and the generated Android manifest
   utils/                 Dates, time zones and daylight saving time
@@ -427,7 +470,7 @@ The tests wait for real states: an API response (`waitForResponse`), a visible t
 | `booking.spec.ts` | Form validation sends nothing. A booking is created (201 with CORS header), shown, stored and hidden from the results, also after a reload. The booking is still there for a new API process on the same file. A double booking gets 409 and the conflict message. |
 | `past-bookings.spec.ts` | The start of an open booking form passes while the user types: warning, *Bekræft booking* disabled, text kept; **Søg igen** searches from the next half hour and reopens the same room with the text, and the booking goes through. The time is checked again right before sending (no request when a late timer has not noticed yet). With the phone's clock years behind, the API's 400 on `startUtc` shows the same warning (with a hint about the clock) instead of an error. |
 | `account.spec.ts` | On web the account panel says login is only in the mobile app and shows no login or logout button. Search and booking work without login, no request carries an `Authorization` header, and `/api/me` is never called. |
-| `api-errors.spec.ts` | 400 on `startUtc` when a new booking does not start after the server's time, or an existing one is moved into the past (which leaves it unchanged). 400 for an invalid period, capacity, empty fields and a too-long title. 409 for overlaps, 201 for back-to-back bookings. 404 for an unknown room or booking. The app's messages for 400 and 404 responses. |
+| `api-errors.spec.ts` | 400 on `startUtc` when a new booking does not start after the server's time, or an existing one is moved into the past (which leaves it unchanged). 400 for an invalid period, capacity, empty fields and a too-long title. 409 for overlaps, 201 for back-to-back bookings. 404 for an unknown room or booking. The app's messages for 400 and 404 responses, and the login message when the API refuses anonymous access (401). |
 
 Two scenarios cannot be produced by a real user, so the tests steer them:
 
