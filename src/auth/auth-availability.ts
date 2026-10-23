@@ -3,16 +3,21 @@
 // API whose current endpoints need no login.
 import type { AuthUnavailableReason } from './auth-controller';
 import { NATIVE_REDIRECT_URI } from './auth-config';
-import type { EntraConfig, EntraConfigResult } from './entra-config';
+import { describeAccountTypes, type EntraConfig, type EntraConfigResult } from './entra-config';
 
 export type AuthAvailability =
   | { available: true; config: EntraConfig; redirectUri: string }
   | { available: false; reason: AuthUnavailableReason; detail?: string };
 
+/**
+ * `runningInExpoGo` comes from `isRunningInExpoGo()` (package `expo`) and is
+ * passed in so the rule can be tested without React Native.
+ */
 export function resolveAuthAvailability(
   platform: string,
   configResult: EntraConfigResult,
   redirectUri: string | null,
+  runningInExpoGo = false,
 ): AuthAvailability {
   // The Angular app owns Microsoft login in the browser.
   if (platform === 'web' || redirectUri === null) return { available: false, reason: 'web' };
@@ -21,10 +26,28 @@ export function resolveAuthAvailability(
       ? { available: false, reason: 'invalid-config', detail: configResult.problem }
       : { available: false, reason: 'not-configured' };
   }
-  // Expo Go returns an exp:// redirect URI, which is not registered in Entra
-  // and would end in AADSTS50011. Only the development build has the scheme.
+  // Expo Go can never finish the login: Microsoft redirects to
+  // roombookingdev://auth, which opens the development build, not Expo Go.
+  // Checked on its own, because the redirect URI alone does not reveal Expo
+  // Go in every SDK version.
+  if (runningInExpoGo) return { available: false, reason: 'expo-go', detail: redirectUri };
+  // An exp:// redirect URI is not registered in Entra and would end in
+  // AADSTS50011. Only the development build has the scheme.
   if (redirectUri !== NATIVE_REDIRECT_URI) return { available: false, reason: 'expo-go', detail: redirectUri };
   return { available: true, config: configResult.config, redirectUri };
+}
+
+/**
+ * One line for the development log, so a test on a phone shows which login
+ * the app will open: the authorize endpoint (with its tenant) and the
+ * accounts it accepts. Contains no client ID, code or token.
+ */
+export function describeAuthAvailability(availability: AuthAvailability): string {
+  if (!availability.available) {
+    return `[auth] Microsoft login unavailable: ${availability.reason}${availability.detail ? ` (${availability.detail})` : ''}`;
+  }
+  const { config } = availability;
+  return `[auth] Microsoft login: ${config.authorizationEndpoint} (${describeAccountTypes(config.tenant)})`;
 }
 
 /** Why login is not offered, for the account panel. */
@@ -37,6 +60,9 @@ export function describeUnavailable(reason: AuthUnavailableReason, detail?: stri
     case 'invalid-config':
       return `Microsoft-login er slået fra: ${detail ?? 'ugyldige Entra-indstillinger.'}`;
     case 'expo-go':
-      return `Microsoft-login kræver development build'en (redirect ${NATIVE_REDIRECT_URI}). Expo Go kører uden login.`;
+      return (
+        `Microsoft-login virker ikke i Expo Go (redirect ${NATIVE_REDIRECT_URI}). ` +
+        'Åbn appen "Room Booking" (development build\'en) i stedet. Søgning og booking virker her uden login.'
+      );
   }
 }

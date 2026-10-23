@@ -145,6 +145,18 @@ export function expectedIssuer(tenantId: string): string {
   return `${ENTRA_INSTANCE}/${tenantId}/v2.0`;
 }
 
+/** Which Microsoft accounts the login page of `tenant` accepts, for the development log. */
+export function describeAccountTypes(tenant: string): string {
+  switch (tenant.toLowerCase()) {
+    case 'common':
+      return 'personal Microsoft accounts and work or school accounts';
+    case 'organizations':
+      return 'work or school accounts only; Microsoft refuses personal accounts here';
+    default:
+      return `work or school accounts of ${tenant} only; Microsoft refuses personal accounts here`;
+  }
+}
+
 /** Whether a user of `tenantId` signed in with a personal Microsoft account. */
 export function isPersonalAccountTenant(tenantId: string): boolean {
   return tenantId.toLowerCase() === PERSONAL_ACCOUNTS_TENANT_ID;

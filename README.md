@@ -90,7 +90,7 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 
 ## Microsoft Entra login
 
-On Android and iOS, the app can sign in with a Microsoft work or school account. Login is **optional**: searching and booking work exactly as before without it, in demo mode and against the API. On web there is no login (the Angular app owns it in the browser), and in Expo Go it is switched off, because Expo Go's `exp://` redirect URI cannot be registered in Entra.
+On Android and iOS, the app can sign in with a personal Microsoft account (Outlook.com, Hotmail, Live.com) or a work or school account. Login is **optional**: searching and booking work exactly as before without it, in demo mode and against the API. On web there is no login (the Angular app owns it in the browser), and in **Expo Go it is switched off** (detected with `isRunningInExpoGo()` from `expo`): Microsoft redirects to `roombookingdev://auth`, which only the development build can receive, so a login started in Expo Go could never finish.
 
 ### How it works
 
@@ -187,9 +187,32 @@ For a release build, a second registration (or a second redirect URI) with the r
 | 9 | **Log ud**, then **Log ind med Microsoft** | Signed out at once; the next login shows the account picker |
 | 10 | `adb shell run-as io.github.kris7011.roombooking.dev cat shared_prefs/SecureStore.xml` while signed in, and again after logout | Signed in: `…roombooking.auth.v1.*` entries whose values are ciphertext, no readable token. After logout: no such entries |
 | 11 | Metro and `adb logcat` during 1–9 | No token, code or code verifier appears in the logs |
-| 12 | Expo Go (`npm run android:go`) | The panel says login needs the development build; demo booking works |
+| 12 | Expo Go (`npm run android:go`, or Expo Go's list of recent projects) | The panel says *Microsoft-login virker ikke i Expo Go … Åbn appen "Room Booking"*; demo booking works |
 
 iOS has not been built or tested at all.
+
+### Troubleshooting Microsoft login
+
+First check **which app** runs and **which login page** it opens. On the phone, the app's icon is **Room Booking** (`io.github.kris7011.roombooking.dev`), not Expo Go. In development, Metro and `adb logcat` show one line when the app starts:
+
+```
+[auth] Microsoft login: https://login.microsoftonline.com/common/oauth2/v2.0/authorize (personal Microsoft accounts and work or school accounts)
+```
+
+```powershell
+adb logcat -s ReactNativeJS:V | Select-String '\[auth\]'
+```
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| *Du kan ikke logge på her med en privat konto. Brug din arbejds- eller skolekonto i stedet.* after typing a Hotmail or Outlook.com address | The login page is `…/organizations/…` (or one tenant): Microsoft offers work and school accounts only there. With `…/common/…` and the app registrations below, a personal address goes on to `login.live.com`. | Check the `[auth] Microsoft login:` line. If it does not say `/common/`: set `EXPO_PUBLIC_ENTRA_TENANT=common` (or remove it) in `.env.local`, stop Metro and start it again with `npx expo start --dev-client --clear` (`EXPO_PUBLIC_` values are read when Metro starts), then open **Room Booking**, not Expo Go. |
+| The panel says *Microsoft-login virker ikke i Expo Go* | The project was opened in Expo Go | Open the **Room Booking** app; with Metro running it loads the same code |
+| Login page shows `unauthorized_client: The client does not exist or is not enabled for consumers` | The mobile registration does not allow personal accounts | *Supported account types* → personal accounts too (`signInAudience: AzureADandPersonalMicrosoftAccount`), see [Manual steps](#manual-steps-in-the-microsoft-entra-admin-center) |
+| *Microsoft-login er ikke sat korrekt op (AADSTS50011)* | Redirect URI `roombookingdev://auth` not registered as *Mobile and desktop applications* | Register it, see [Manual steps](#manual-steps-in-the-microsoft-entra-admin-center) |
+| Signed in, but no *Bekræftet af API'et som …* | The API is not reachable with a token, or validates differently | `adb reverse tcp:5003 tcp:5003` (lost when adb restarts or the cable is unplugged), the API from PR #9 running with `Entra__ApiClientId`; `GET http://localhost:5003/api/me` without a token must answer `401` with `WWW-Authenticate: Bearer` (503 means `Entra:ApiClientId` is missing) |
+| The app shows the launcher or *Cannot connect to Expo CLI* | The phone does not reach Metro | Start Metro, and over USB run `adb reverse tcp:8081 tcp:8081` too |
+
+The app never sends `domain_hint` or `login_hint`: on `/common`, Microsoft decides from the e-mail address whether it is a personal or a work or school account, and a hint would shut out the other kind.
 
 ## Commands
 
@@ -233,7 +256,8 @@ src/
     id-token.ts          Reads the ID token for display (audience, issuer, tenant, expiry checked)
     session-storage.ts   Refresh token and display data in SecureStore, in chunks
     auth-errors.ts       AuthFlowError, AADSTS codes and Danish messages
-    auth-availability.ts Whether login is offered: web, Expo Go, settings
+    auth-availability.ts Whether login is offered: web, Expo Go, settings; the development log line
+    authorize-request.ts The authorization request (endpoint, scopes, PKCE, no account hints)
     auth-runtime.native.ts  Android/iOS: wires AuthRequest, token client and SecureStore together
     auth-runtime.ts      Web: login unavailable
     secure-store.native.ts  SecureStore adapter (WHEN_UNLOCKED_THIS_DEVICE_ONLY)
@@ -294,7 +318,8 @@ Covered:
 - **Tokens in API calls** (`http-client-auth.test.ts`): `Authorization` only when signed in, one retry after a forced refresh on 401, an expired session becomes a Danish `ApiError` without a request, `GET /api/me` and how its failures are shown; through the real `AuthController`, a booking waiting for its renewal is not sent when the user logs out, nor when another user signs in meanwhile (no `POST` leaves the app), including a personal account with the same e-mail address as the work account before it (only `tid`/`oid` identify a user); a renewal failing after logout aborts it; a grant that is no longer current right before `fetch` is not sent; a 401 whose forced renewal overlaps a logout, or logout + login as another user, is not sent again; a 401 followed by logout (and login as another user) before the retry is aborted with *session-changed*, without renewing the other user's token and without a second request; with an unchanged session a 401 still renews once and the retry carries the renewed token; an ordinary anonymous booking after logout still goes out without a token. Transport rules: HTTPS only in a release bundle, local HTTP in a development bundle, never HTTP across a network.
 - **Token transport against `http://localhost`** (`http-client-transport.test.ts`, the `adb reverse` setup): a development bundle sends the token; a release bundle, or one whose `__DEV__` is unknown, sends none and does not even ask for it, and the request still works.
 - **Android manifest** (`app-config.test.ts`): the main manifest does not enable cleartext HTTP, so release builds keep Android's default.
-- **Login availability** (`auth-availability.test.ts`): web, Expo Go, missing and invalid settings.
+- **Login availability** (`auth-availability.test.ts`): web, Expo Go (by its `exp://` redirect URI, and by `isRunningInExpoGo()` even when the redirect URI looks like the development build's), missing and invalid settings; the development log line names the authorize endpoint and which accounts it accepts, never the client ID.
+- **Authorization request** (`authorize-request.test.ts`): `/common` endpoint by default, client ID, redirect URI, scopes, PKCE always on, no `domain_hint`/`login_hint`; `organizations` changes the endpoint.
 
 Not covered yet: React components in isolation (this needs `jest-expo` and React Native Testing Library). The end-to-end tests cover them in the browser.
 
@@ -514,9 +539,10 @@ The Metro terminal then shows:
 
 ```
 [auth] Redirect URI: roombookingdev://auth
+[auth] Microsoft login: https://login.microsoftonline.com/common/oauth2/v2.0/authorize (personal Microsoft accounts and work or school accounts)
 ```
 
-That line is written once at start (and on every reload, `r`) in development only, and nothing else about login is logged. In Expo Go it reads `exp://…/--/auth (not roombookingdev://auth: …)`.
+These lines are written at start (and on every reload, `r`) in development only; they contain no client ID, code or token, and nothing else about login is logged. In Expo Go the second line reads `[auth] Microsoft login unavailable: expo-go (…)`.
 
 Later, as long as the native configuration has not changed, start Metro only and open the installed app: `npm start`, then press `a`. Run `npm run android:dev-build` again after changing `app.json`, a config plugin or a package with native code.
 

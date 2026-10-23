@@ -2,13 +2,15 @@
 // (expo-auth-session), Entra's token endpoint and SecureStore. Metro picks
 // this file over auth-runtime.ts on native, so none of it reaches the web
 // bundle.
+import { isRunningInExpoGo } from 'expo';
 import { AuthRequest, Prompt, ResponseType } from 'expo-auth-session';
 import { Platform } from 'react-native';
 
 import { setAccessTokenProvider } from '../api/http-client';
 import { AuthController, type AuthorizeResult } from './auth-controller';
 import { AuthFlowError, oauthError } from './auth-errors';
-import { resolveAuthAvailability } from './auth-availability';
+import { describeAuthAvailability, resolveAuthAvailability } from './auth-availability';
+import { buildAuthorizeRequest } from './authorize-request';
 import { entraConfigResult, type EntraConfig } from './entra-config';
 import { readIdTokenUser } from './id-token';
 import { getAuthRedirectUri } from './redirect-uri';
@@ -24,7 +26,10 @@ export function getAuthController(): AuthController {
 }
 
 function createController(): AuthController {
-  const availability = resolveAuthAvailability(Platform.OS, entraConfigResult, getAuthRedirectUri());
+  const availability = resolveAuthAvailability(Platform.OS, entraConfigResult, getAuthRedirectUri(), isRunningInExpoGo());
+  // Development only: shows in Metro and logcat which login page the app
+  // opens (…/common/… for personal and work or school accounts).
+  if (__DEV__) console.info(describeAuthAvailability(availability));
   if (!availability.available) return AuthController.unavailable(availability.reason, availability.detail);
 
   const { config, redirectUri } = availability;
@@ -56,17 +61,15 @@ function createController(): AuthController {
  * state, and rejects a redirect whose state does not match.
  */
 async function authorize(config: EntraConfig, redirectUri: string): Promise<AuthorizeResult> {
+  const { authorizationEndpoint, ...options } = buildAuthorizeRequest(config, redirectUri);
   const request = new AuthRequest({
-    clientId: config.clientId,
-    redirectUri,
-    scopes: config.scopes,
+    ...options,
     responseType: ResponseType.Code,
-    usePKCE: true,
     // Let the user pick an account, also right after signing out.
     prompt: Prompt.SelectAccount,
   });
 
-  const result = await request.promptAsync({ authorizationEndpoint: config.authorizationEndpoint });
+  const result = await request.promptAsync({ authorizationEndpoint });
 
   switch (result.type) {
     case 'success': {
