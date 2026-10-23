@@ -56,7 +56,7 @@ jobs:
             $rejected = $true
           }
           if (-not $rejected) { throw 'Insecure hosted target was accepted' }
-          Remove-Item .env.local
+          Remove-Item -LiteralPath .env.local -Force
 
       - name: Type-check app and tests
         run: npm run typecheck
