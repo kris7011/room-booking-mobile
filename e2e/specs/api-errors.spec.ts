@@ -135,4 +135,17 @@ test.describe('API error messages in the app', () => {
     await expect(app.alert).toContainText('Mødelokalet findes ikke længere.');
     expect(await api.listBookings()).toEqual([]);
   });
+
+  test('asks the user to sign in when the API refuses anonymous access (401)', async ({ app }) => {
+    // What the API answers since phase 3 unless it runs in its anonymous
+    // demo mode: the original endpoints belong to the legacy organisation's
+    // members. The web app has no login, so it explains instead of failing.
+    await app.page.route(`${API_URL}/api/rooms`, (route) =>
+      route.fulfill({ status: 401, headers: { 'WWW-Authenticate': 'Bearer' }, body: '' }),
+    );
+    await app.page.goto('/');
+
+    await expect(app.alert).toContainText('Kunne ikke hente mødelokaler');
+    await expect(app.alert).toContainText("API'et kræver login");
+  });
 });

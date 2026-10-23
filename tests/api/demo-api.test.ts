@@ -258,3 +258,27 @@ describe('bookings that do not start in the future are rejected with 400, like t
     assert.equal(booking.roomId, 1);
   });
 });
+
+describe('demo bookings list', () => {
+  test('lists the demo bookings that have not ended, and deleting frees the room', async () => {
+    const day = uniqueDay();
+    const booking = await book(day, 1, '09:00', '10:00', { title: 'Listed' });
+
+    const listed = await settle(demoApi.listBookings!(at(day, '00:00')));
+    const mine = listed.find((candidate) => candidate.id === booking.id);
+    assert.ok(mine);
+    assert.equal(mine.title, 'Listed');
+    assert.equal(mine.canModify, true);
+
+    assert.deepEqual(await settle(demoApi.listBookings!(at(day, '23:00'))).then((all) => all.filter((b) => b.id === booking.id)), []);
+
+    await settle(demoApi.deleteBooking!(booking.id));
+    assert.ok((await searchFree(day, '09:00', '10:00')).some((room) => room.id === 1));
+
+    await assert.rejects(settle(demoApi.deleteBooking!(booking.id)), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 404);
+      return true;
+    });
+  });
+});

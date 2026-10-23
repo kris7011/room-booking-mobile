@@ -9,13 +9,15 @@ import { StatusMessage } from './StatusMessage';
 interface AllRoomsListProps {
   state: LoadState<MeetingRoom[]>;
   onRetry: () => void;
+  /** Defaults to "Alle mødelokaler". */
+  title?: string;
 }
 
 // Overview of every room (GET /api/rooms), shown before the first search.
-export function AllRoomsList({ state, onRetry }: AllRoomsListProps) {
+export function AllRoomsList({ state, onRetry, title = 'Alle mødelokaler' }: AllRoomsListProps) {
   return (
     <View style={styles.list}>
-      <Text style={styles.heading}>Alle mødelokaler</Text>
+      <Text style={styles.heading}>{title}</Text>
       {state.status === 'loading' || state.status === 'idle' ? (
         <StatusMessage variant="loading" title="Henter mødelokaler…" />
       ) : state.status === 'error' ? (

@@ -3,6 +3,7 @@
 // demo bookings disappear when the app reloads.
 import { ApiError } from './http-client';
 import type { BookingResponse, SaveBookingRequest } from '../models/booking';
+import type { OrganizationBooking } from '../models/organization';
 import type { AvailableRoomsQuery, MeetingRoom } from '../models/room';
 import type { RoomBookingApi } from './room-booking-api';
 
@@ -19,6 +20,7 @@ interface DemoBooking {
   roomId: number;
   start: number;
   end: number;
+  booking: OrganizationBooking;
 }
 
 // Recurring local-time blocks so some searches show fewer or no free rooms:
@@ -28,7 +30,7 @@ const recurringBusyBlocks = [
   { roomId: 2, startHour: 13, endHour: 14 },
 ];
 
-const demoBookings: DemoBooking[] = [];
+let demoBookings: DemoBooking[] = [];
 let nextDemoBookingId = 1;
 
 function delay(ms: number): Promise<void> {
@@ -92,8 +94,7 @@ export const demoApi: RoomBookingApi = {
       });
     }
 
-    demoBookings.push({ roomId: room.id, start, end });
-    return {
+    const booking: OrganizationBooking = {
       id: nextDemoBookingId++,
       roomId: room.id,
       roomName: room.name,
@@ -102,6 +103,27 @@ export const demoApi: RoomBookingApi = {
       startUtc: request.startUtc,
       endUtc: request.endUtc,
       createdUtc: new Date().toISOString(),
+      createdByCurrentUser: true,
+      canModify: true,
     };
+    demoBookings.push({ roomId: room.id, start, end, booking });
+    return booking;
+  },
+
+  async listBookings(fromUtc: string) {
+    await delay(DEMO_LATENCY_MS);
+    const from = Date.parse(fromUtc);
+    return demoBookings
+      .filter((demo) => demo.end > from)
+      .sort((a, b) => a.start - b.start)
+      .map((demo) => demo.booking);
+  },
+
+  async deleteBooking(bookingId: number) {
+    await delay(DEMO_LATENCY_MS);
+    if (!demoBookings.some((demo) => demo.booking.id === bookingId)) {
+      throw new ApiError('http', 'Booking does not exist.', 404, { code: 'booking_not_found' });
+    }
+    demoBookings = demoBookings.filter((demo) => demo.booking.id !== bookingId);
   },
 };

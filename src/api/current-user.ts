@@ -142,8 +142,8 @@ export function describeOrganizationAccess(user: RegisteredUser): { title: strin
     return {
       title: 'Du er ikke medlem af en organisation endnu',
       detail:
-        'Du får adgang, når en ejer eller administrator inviterer dig. Den første ejer af standardorganisationen ' +
-        "udpeges af den, der driver API'et, ud fra dit bruger-ID herunder. Indtil da kan du søge og booke som før.",
+        'Opret din egen organisation, eller accepter en invitation, når en ejer eller administrator inviterer dig. ' +
+        'Mødelokaler og bookinger hører altid til en organisation.',
     };
   }
   const count = user.organizations.length;
