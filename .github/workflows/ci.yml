@@ -34,6 +34,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Smoke-test API target switching script
+        shell: pwsh
+        run: |
+          @(
+            'EXPO_PUBLIC_API_URL=http://localhost:5003'
+            'EXPO_PUBLIC_ENTRA_CLIENT_ID=preserve-me'
+            'EXPO_PUBLIC_ENTRA_API_SCOPE=api://example/access_as_user'
+          ) | Set-Content .env.local
+          ./scripts/Set-ApiTarget.ps1 -Mode Hosted -HostedUrl 'https://example.org/'
+          $contents = Get-Content .env.local -Raw
+          if ($contents -notmatch 'EXPO_PUBLIC_API_URL=https://example.org') { throw 'Hosted target missing' }
+          if ($contents -notmatch 'EXPO_PUBLIC_ENTRA_CLIENT_ID=preserve-me') { throw 'Entra ID changed' }
+          ./scripts/Set-ApiTarget.ps1 -Mode Local
+          $contents = Get-Content .env.local -Raw
+          if ($contents -notmatch 'EXPO_PUBLIC_API_URL=http://localhost:5003') { throw 'Local target missing' }
+          $rejected = $false
+          try {
+            ./scripts/Set-ApiTarget.ps1 -Mode Hosted -HostedUrl 'http://example.org'
+          } catch {
+            $rejected = $true
+          }
+          if (-not $rejected) { throw 'Insecure hosted target was accepted' }
+          Remove-Item .env.local
+
       - name: Type-check app and tests
         run: npm run typecheck
 
