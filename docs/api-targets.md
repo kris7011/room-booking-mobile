@@ -1,20 +1,21 @@
-# Fase 4A: Skift mellem lokal og hostet API under udvikling
+# Phase 4A: Switch between local and hosted APIs during development
 
-Room Booking skal kunne bruges igen lokalt, selv hvis en betalt API-hosting
-bliver opsagt. Backendens backup- og gendannelsesguide findes i
+Room Booking should remain usable locally if paid API hosting is
+cancelled. The backend backup and restore procedure is documented in
 [meeting-room-booking/docs/local-portability.md](https://github.com/kris7011/meeting-room-booking/blob/feature/phase4a-portable-local-backup/docs/local-portability.md).
 
-**Dette script er til Expo development builds og Metro.**
-Den installerede Android-release har endnu ikke valg af server inde i appen:
-`EXPO_PUBLIC_API_URL` læses ved bundling. En release-app skal derfor
-genbygges til en anden URL, indtil der tilføjes et sikkert runtime-servervalg.
+**This script is intended for Expo development builds and Metro.**
+The released Android APK cannot yet change its API server inside the
+app. `EXPO_PUBLIC_API_URL` is embedded at bundle time, so a released
+app must be rebuilt with a different URL until secure runtime server
+selection is implemented.
 
-## Skift til lokal .NET API
+## Switch to the local .NET API
 
-Start først API'et fra backend-repository med `scripts/Start-Local.ps1`
-og kontroller `http://localhost:5003/health`.
+First start the backend using `scripts/Start-Local.ps1` in the backend
+repository and confirm `http://localhost:5003/health` is reachable.
 
-Kør fra mobilprojektets rodmappe:
+From the mobile repository:
 
 ```powershell
 cd C:\Users\krisr\source\repos\room-booking-mobile-entra
@@ -26,40 +27,44 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 npx expo start --dev-client --clear --port 8081
 ```
 
-Det kræver USB-tilslutning på din fysiske Samsung-telefon.
-Bearer-tokens sendes kun over lokal development-HTTP via localhost/ADB,
-ikke ubeskyttet HTTP på Wi-Fi. Microsoft-login kræver stadig internet.
+This requires the physical Samsung device to be connected over USB.
+Bearer tokens travel over local development HTTP through localhost/ADB,
+not unencrypted HTTP over Wi-Fi. Microsoft sign-in still requires
+internet access.
 
-## Skift til en HTTPS-hostet API
+## Switch to an HTTPS-hosted API
 
-Når hosting er sat op og API'et kan nås med et gyldigt certifikat:
+Once the API is deployed with a trusted HTTPS certificate:
 
 ```powershell
 .\scripts\Set-ApiTarget.ps1 -Mode Hosted -HostedUrl "https://api.example.com"
 npx expo start --dev-client --clear --port 8081
 ```
 
-Erstat eksemplets URL med din rigtige HTTPS-adresse. Scriptet afviser
-HTTP-hosting og URL'er med brugeroplysninger, query eller fragment.
+Replace the example URL with the real hosted API endpoint. The script
+rejects HTTP addresses and URLs containing credentials, queries, or
+fragments.
 
-Scriptet ændrer kun `EXPO_PUBLIC_API_URL` i `.env.local`: Entra
-client ID, scope og andre værdier bevares. Det ændrer ikke databasen og
-flytter ikke nogen data.
+The script changes only `EXPO_PUBLIC_API_URL` in `.env.local`.
+Existing Entra client IDs, scopes, and other settings are preserved.
+It does not migrate a database or synchronize any data.
 
-## Før hostingen opsiges
+## Before cancelling hosting
 
-1. Stop alle skrivninger på den hostede API.
-2. Eksportér en **verificeret SQLite-backup**, og opbevar en kopi uden for
-   hostingkontoen. Der er endnu ingen automatisk synkronisering.
-3. Gendan den til en **ny databasefil** på PC'en med backendens restore-script.
-4. Start API'et med den gendannede database og kontroller mødelokaler,
-   bookinger og medlemsroller.
-5. Skift denne udviklingsapp til `-Mode Local` og test på Samsung.
-6. Opsig først hosting, når den lokale gendannelsestest er bestået.
+1. Stop all writes to the hosted API.
+2. Export a **verified SQLite backup** and keep a copy outside the
+   hosting provider's account. No automatic synchronization is available.
+3. Restore that backup into a **new database file** on the local PC
+   with the backend restore script.
+4. Start the API with the restored database and verify the meeting
+   rooms, bookings, and membership roles.
+5. Switch the development app to `-Mode Local` and test on Samsung.
+6. Cancel hosting only after the local recovery test has passed.
 
-**Vigtigt:** Hvis hostingen senere bruger PostgreSQL frem for SQLite, kræver
-flytningen en særskilt eksport-/importfunktion. Backupværktøjet til SQLite
-kan ikke direkte åbne en PostgreSQL-dump.
+**Important:** If future hosting uses PostgreSQL rather than SQLite,
+a separate export/import procedure is needed. The SQLite backup tool
+cannot directly import a PostgreSQL dump.
 
-**Status:** Dette er skift af udviklingsmiljø, ikke en løsning til at lade
-en almindelig distribueret Android-release vælge URL uden opdatering.
+**Scope:** This is a development environment switch, not a feature
+allowing an already-distributed Android release to switch API servers
+without updating the app.
