@@ -5,6 +5,10 @@ name: E2E
 # their own and a slow or failing E2E run is easy to tell apart.
 
 on:
+  # Pushes to main keep the README's E2E badge current after a merge.
+  push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
     inputs:

@@ -2,6 +2,8 @@
 
 How to run this app in a browser against the [meeting-room-booking](https://github.com/kris7011/meeting-room-booking) ASP.NET Core API, and the results of the integration test run on 19 October 2026.
 
+The web build has no Microsoft sign-in, so it uses the API's original anonymous endpoints. Since the API added organisations and sign-in (meeting-room-booking #9–#12), those endpoints answer `401` unless the API runs in its anonymous demo mode, which the steps below switch on. The test results further down were recorded **before** that change; the automated E2E suite ([testing.md](testing.md#end-to-end-tests-npm-run-teste2e)) now covers the same ground against the current API on every pull request.
+
 ## How the pieces talk to each other
 
 ```
@@ -22,10 +24,11 @@ Prerequisite: .NET SDK 10.
 ```powershell
 git clone git@github.com:kris7011/meeting-room-booking.git
 cd meeting-room-booking
+$env:LegacyApi__AllowAnonymous = "true"   # anonymous demo mode; accepted only in Development and Testing
 dotnet run --project .\src\MeetingRoomBooking.Api\MeetingRoomBooking.Api.csproj --launch-profile http
 ```
 
-The `http` profile listens on `http://localhost:5003` and uses the Development environment, which enables CORS for `http://localhost:8081`. On first start, EF Core creates the SQLite file `meeting-room-booking.db` in the directory you run the command from, applies the migrations and seeds three rooms.
+The `http` profile listens on `http://localhost:5003` and uses the Development environment, which enables CORS for `http://localhost:8081`. Without `LegacyApi__AllowAnonymous`, the app shows that sign-in is required (see the API's README, *The original endpoints*). On first start, EF Core creates the SQLite file `meeting-room-booking.db` in the directory you run the command from, applies the migrations and seeds three rooms.
 
 Check that it runs:
 
@@ -101,6 +104,6 @@ Headless Chrome at a 390 × 844 phone viewport, driven over the Chrome DevTools 
 ### Not tested
 
 - **Server-side validation messages in the UI.** The booking form validates title and booked-by before sending, and limits their length, so the UI cannot produce a 400 from `POST /api/bookings`. The API's 400 responses were tested over HTTP, and the app's handling of them (`Ugyldige oplysninger: …`) is covered by the unit tests in `tests/api/error-messages.test.ts`. The end-to-end suite now also covers the 400 and 404 messages in the browser, by changing the outgoing request (`e2e/specs/api-errors.spec.ts`).
-- **Android and iOS** against the real backend. Only web was tested.
+- **Android and iOS** against the real backend. This run covered web only. The current device status is in [device-testing.md](device-testing.md#current-status).
 - **Production configuration.** Not deployed. The automated backend test `Production_SendsNoCorsHeaders` checks that the Production environment sends no CORS headers.
-- The browser and HTTP checks were run once by hand from scripts outside the repository. They have since been rebuilt as the automated end-to-end suite (`npm run test:e2e`), which also runs in CI. See "End-to-end tests" in the README.
+- The browser and HTTP checks were run once by hand from scripts outside the repository. They have since been rebuilt as the automated end-to-end suite (`npm run test:e2e`), which also runs in CI. See [testing.md](testing.md#end-to-end-tests-npm-run-teste2e).

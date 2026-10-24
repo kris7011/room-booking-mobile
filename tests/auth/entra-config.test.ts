@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, test } from 'node:test';
@@ -107,9 +108,22 @@ test('personal accounts are recognised by the consumer tenant ID', () => {
   assert.ok(!isPersonalAccountTenant('consumers'));
 });
 
+/** Asks Git itself, so the test follows the rules rather than their exact wording. */
+function isGitIgnored(path: string): boolean {
+  const result = spawnSync('git', ['check-ignore', '--quiet', '--no-index', path], { cwd: projectRoot });
+  assert.ok(result.status === 0 || result.status === 1, `git check-ignore failed for ${path}: ${String(result.stderr)}`);
+  return result.status === 0;
+}
+
 describe('no secrets in the app', () => {
-  test('.env.local is gitignored', () => {
-    assert.match(readFileSync(resolve(projectRoot, '.gitignore'), 'utf8'), /^\.env\*\.local$/m);
+  test('local env files and Android signing credentials are gitignored', () => {
+    for (const path of ['.env.local', '.env', '.env.production', 'release.keystore', 'upload.jks', 'keystore.properties']) {
+      assert.ok(isGitIgnored(path), path);
+    }
+  });
+
+  test('the secret-free .env.example template stays tracked', () => {
+    assert.ok(!isGitIgnored('.env.example'));
   });
 
   test('the example settings and the source contain no client secret', () => {

@@ -1,4 +1,4 @@
-// Web. Expo web has no Microsoft login: the Angular app has its own. On
+// Web. Microsoft login is not implemented in the browser. On
 // Android and iOS, Metro uses redirect-uri.native.ts instead of this file,
 // which must export the same functions.
 

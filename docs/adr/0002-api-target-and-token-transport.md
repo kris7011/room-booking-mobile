@@ -1,13 +1,14 @@
 # ADR 0002: API chosen at bundle time; token transport enforced in the app
 
-- **Status:** Accepted. The token transport rule and
-  `scripts/Set-ApiTarget.ps1` are both on `main` (script merged in PR #9).
+- **Status:** Accepted. The token transport rule and API-target switching
+  script are on `main` (script merged through PR #9).
 - **Code:** `src/config/env.ts`, `src/api/http-client.ts`
   (`canSendBearerToken`), `scripts/Set-ApiTarget.ps1`
 
 ## Context
 
-Phase 4A requires that Room Booking keeps working if paid hosting stops: the
+The project's local-portability milestone (internally "Phase 4A") requires
+that Room Booking keeps working if paid hosting stops: the
 same app must be able to talk to an HTTPS-hosted API **or** to the API running
 on the owner's PC. A bearer token sent over plain HTTP across a network can be
 read and replayed by anyone on that network.
@@ -35,8 +36,9 @@ read and replayed by anyone on that network.
 
 ## Consequences
 
-- Positive: a misconfigured `.env.local` cannot leak a token; the security
-  rule is unit-tested.
+- Positive: a plain-HTTP LAN API address in `.env.local` cannot receive a
+  bearer token; this transport rule is unit-tested. HTTPS destinations still
+  need to be trusted and configured correctly.
 - Positive: switching servers in development is one script call plus a Metro
   restart.
 - Negative: an installed release build cannot be pointed at another server

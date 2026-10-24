@@ -20,7 +20,7 @@ import { TIME_ZONE } from './support/test-data';
 //
 // Starts the real .NET API on a new SQLite database and a static export of
 // the web app, runs the tests in one Chrome window, and stops both servers
-// again. See the "End-to-end tests" section in README.md.
+// again. See "End-to-end tests" in docs/testing.md.
 
 if (!existsSync(BACKEND_PROJECT)) {
   throw new Error(

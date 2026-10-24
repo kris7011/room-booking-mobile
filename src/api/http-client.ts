@@ -55,8 +55,8 @@ export function setAccessTokenProvider(provider: AccessTokenProvider | null): vo
  *   127.0.0.0/8, ::1) and to 10.0.2.2, the Android emulator's alias for the
  *   host PC. Neither leaves the device or the PC: on a physical phone,
  *   `adb reverse tcp:5003 tcp:5003` carries localhost:5003 over the USB
- *   cable to the PC's localhost (see README, "Testing login against the API
- *   on a physical phone").
+ *   cable to the PC's localhost (see docs/device-testing.md, "Sign-in against
+ *   a local API over USB").
  *
  * Never over plain HTTP to any other address, not even a private Wi-Fi
  * address: anyone on that network could read and replay the token.

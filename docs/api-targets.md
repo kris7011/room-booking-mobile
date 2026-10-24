@@ -1,24 +1,26 @@
-# Phase 4A: Switch between local and hosted APIs during development
+# Switching between a local and a hosted API (development builds)
 
 Room Booking should remain usable locally if paid API hosting is
-cancelled. The backend backup and restore procedure is documented in
+cancelled. This document covers the mobile side of that goal: pointing the
+Android development build at either API. The backend backup and restore
+procedure is documented in
 [meeting-room-booking/docs/local-portability.md](https://github.com/kris7011/meeting-room-booking/blob/main/docs/local-portability.md).
 
 **This script is intended for Expo development builds and Metro.**
-The released Android APK cannot yet change its API server inside the
-app. `EXPO_PUBLIC_API_URL` is embedded at bundle time, so a released
-app must be rebuilt with a different URL until secure runtime server
-selection is implemented.
+`EXPO_PUBLIC_API_URL` is embedded at bundle time, so an installed app
+cannot change its API server at run time. Release builds are not
+implemented; one would have to be rebuilt with a different URL until
+secure runtime server selection exists (see
+[ADR 0002](adr/0002-api-target-and-token-transport.md)).
 
 ## Switch to the local .NET API
 
 First start the backend using `scripts/Start-Local.ps1` in the backend
 repository and confirm `http://localhost:5003/health` is reachable.
 
-From the mobile repository:
+From the root of this repository:
 
 ```powershell
-cd C:\Users\krisr\source\repos\room-booking-mobile-entra
 .\scripts\Set-ApiTarget.ps1 -Mode Local
 
 $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
@@ -27,7 +29,8 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 npx expo start --dev-client --clear --port 8081
 ```
 
-This requires the physical Samsung device to be connected over USB.
+This requires the phone to be connected over USB with USB debugging on
+(see [device-testing.md](device-testing.md#sign-in-against-a-local-api-over-usb)).
 Bearer tokens travel over local development HTTP through localhost/ADB,
 not unencrypted HTTP over Wi-Fi. Microsoft sign-in still requires
 internet access.
@@ -65,8 +68,15 @@ It does not migrate a database or synchronize any data.
    with the backend restore script.
 4. Start the API with the restored database and verify the meeting
    rooms, bookings, and membership roles.
-5. Switch the development app to `-Mode Local` and test on Samsung.
+5. Switch the development app to `-Mode Local` and test on the phone.
 6. Cancel hosting only after the local recovery test has passed.
+
+**Use the same API version for the restore.** The backend's restore does
+not yet compare schema versions: a backup made by a newer API version can be
+restored and started by an older one, and nothing warns about it (a known
+limitation listed in the backend walkthrough). Run the restored file with the
+API version that made the backup, or a newer one, which migrates it after
+taking its own verified backup.
 
 **Important:** If future hosting uses PostgreSQL rather than SQLite,
 a separate export/import procedure is needed. The SQLite backup tool
