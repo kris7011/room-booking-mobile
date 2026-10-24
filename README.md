@@ -9,9 +9,9 @@ ASP.NET Core API. Find a free meeting room for a number of people, a day and
 a time, and book it from an Android phone or a browser. Optional Microsoft
 Entra ID sign-in gives access to organisations and their rooms.
 
-<!-- Screenshots: add real captures from the Android development build here
-     (search form, results, booking form, organisation panel), stored under
-     docs/images/. Do not add mock-ups. -->
+<!-- Screenshots: add real captures here once they exist. Planned files and
+     the rules for capturing them (no personal data, no mock-ups) are in
+     docs/images/README.md. -->
 
 ## Purpose
 
@@ -35,8 +35,9 @@ than mocks alone.
 - A suggested search time that keeps up with the clock, and a booking whose
   start has passed cannot be confirmed ([time handling](docs/time-handling.md)).
 - Optional Microsoft Entra ID sign-in on Android and iOS for personal and
-  work or school accounts: authorization code flow with PKCE, refresh token in
-  SecureStore, silent renewal ([details](docs/entra-login.md)).
+  work or school accounts: OAuth 2.0 authorization code flow with PKCE as a
+  public client (no secret), refresh token in SecureStore, silent renewal
+  ([details](docs/entra-login.md)).
 - Organisations for signed-in users: choose the active organisation, create
   one, accept invitations; Owners and Admins manage rooms, members and
   invitations ([details](docs/organisations.md)).
@@ -90,11 +91,34 @@ flowchart LR
 - **Signed in**, the app calls `/api/organizations/{id}/…` for the active
   organisation. **Signed out** (and always on web), it calls the original
   `/api/rooms` and `/api/bookings`, which the API only serves anonymously in
-  its Development-only demo mode.
-- Neither web client has Microsoft sign-in; it exists only in the native app.
+  its Development-only demo mode. Neither web client has sign-in.
 
 The code structure, sign-in flow and request handling are explained in the
 [developer walkthrough](docs/PROJECT_WALKTHROUGH.md).
+
+### What the backend guarantees
+
+Correctness rules are enforced by the API and its database, not by this app.
+Summarised from the
+[backend walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/docs/PROJECT_WALKTHROUGH.md),
+which links each point to its code and tests:
+
+- **Tenant isolation.** Every organisation endpoint sits under
+  `/api/organizations/{organizationId}` behind one route-group filter that
+  checks the token, the registered user and membership of that organisation.
+  Non-members get `404`, so they cannot tell whether it exists. Roles are read
+  from the database on every request, never from the token, and queries are
+  also filtered by organisation, so a guessed ID from another organisation is
+  "not found".
+- **No double bookings, also under concurrency.** The overlap check and the
+  insert run in one transaction that takes SQLite's write lock at its start
+  (`BEGIN IMMEDIATE`), so two parallel requests cannot both pass the check.
+  Database triggers re-check overlaps on every insert and update, and a
+  composite foreign key keeps a booking in its room's organisation.
+  Integration tests use parallel requests and direct SQL to try to bypass it.
+- **Safe retries.** Registration is idempotent per identity (issuer + object
+  ID), and creating an organisation honours the `Idempotency-Key` this app
+  sends, so a retry after a timeout never creates a duplicate.
 
 ## Tech stack
 
@@ -105,6 +129,9 @@ The code structure, sign-in flow and request handling are explained in the
 - Node's built-in test runner (`node:test`) for unit and integration tests
 - Playwright for end-to-end tests
 - GitHub Actions for CI
+- Backend ([separate repository](https://github.com/kris7011/meeting-room-booking)):
+  ASP.NET Core Minimal API on .NET 10, EF Core 10 with SQLite, Microsoft Entra
+  ID token validation, and an Angular web client
 
 ## Engineering decisions
 
@@ -202,9 +229,8 @@ addresses are in [local-development.md](docs/local-development.md).
 | [Backend integration](docs/backend-integration.md) | Running against the API in a browser; integration results from 19 October 2026 |
 | [Dependency advisories](docs/security-advisories.md) | The current `npm audit` findings and why they do not reach the app bundle |
 
-The backend's own documentation is in the
-[meeting-room-booking](https://github.com/kris7011/meeting-room-booking)
-repository.
+The backend is documented in its own repository: [README](https://github.com/kris7011/meeting-room-booking)
+and [walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/docs/PROJECT_WALKTHROUGH.md).
 
 ## Known limitations
 
@@ -239,9 +265,7 @@ checks where they are recorded. See the
 
 MIT, see [LICENSE](LICENSE).
 
-The project was created from Expo's `blank-typescript` template (`create-expo-app`). The template ships with an MIT license held by 650 Industries, Inc. (Expo), and its copyright notice is kept in `LICENSE` because parts of the template are still in the repository:
-
-- `index.ts` and all images in `assets/` (app icon, adaptive icon layers, splash icon, favicon) are unchanged from the template.
-- `app.json`, `tsconfig.json` and `.gitignore` started from the template and have been modified.
-
-Everything else is original to this project. Dependencies installed through npm are covered by their own licenses, which ship inside each package in `node_modules/`.
+The project started from Expo's `blank-typescript` template, whose MIT
+copyright notice (650 Industries, Inc.) is kept in `LICENSE`: `index.ts` and
+the images in `assets/` are unchanged from it, and `app.json`, `tsconfig.json`
+and `.gitignore` started from it. npm dependencies carry their own licenses.

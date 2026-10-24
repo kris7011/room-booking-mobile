@@ -71,6 +71,13 @@ It does not migrate a database or synchronize any data.
 5. Switch the development app to `-Mode Local` and test on the phone.
 6. Cancel hosting only after the local recovery test has passed.
 
+**Use the same API version for the restore.** The backend's restore does
+not yet compare schema versions: a backup made by a newer API version can be
+restored and started by an older one, and nothing warns about it (a known
+limitation listed in the backend walkthrough). Run the restored file with the
+API version that made the backup, or a newer one, which migrates it after
+taking its own verified backup.
+
 **Important:** If future hosting uses PostgreSQL rather than SQLite,
 a separate export/import procedure is needed. The SQLite backup tool
 cannot directly import a PostgreSQL dump.
