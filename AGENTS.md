@@ -42,3 +42,12 @@ Preserve the application's working architecture unless an intentional change is 
 - Check the diff, installed dependencies, CI results, and docs. Do not claim a test passed until it did.
 - Keep PRs focused and reviewable; document risk, validation, and limitations in English. Do not merge or deploy without explicit authorization.
 - Preserve the option to use the same app with an HTTPS-hosted API or a locally hosted API; understand that Expo's `EXPO_PUBLIC_API_URL` is embedded at build/bundle time until an explicitly designed runtime selector is delivered.
+
+## Technical understanding (part of the Definition of Done)
+
+The repository owner must be able to explain, demonstrate, troubleshoot, and defend every important part of this app.
+
+- When implementing or significantly changing a feature, give the owner a walkthrough: the problem solved, how it works, the files/components/functions involved, the data and request flow, why this design was chosen over alternatives, how authentication, token handling, validation, and security are handled, how it is tested, and its failure modes and limitations. Reference real code; never invent details or claim untested behavior is tested.
+- Keep [`docs/PROJECT_WALKTHROUGH.md`](docs/PROJECT_WALKTHROUGH.md) accurate in the same PR as the change, using its status labels (Tested, Manual, In review, Not implemented).
+- Record significant architectural decisions as short ADRs in [`docs/adr/`](docs/adr/README.md). Avoid documentation that nobody needs.
+- Be transparent about AI assistance: keep `Co-Authored-By` trailers on AI-assisted commits, and never present AI-generated code as hand-written.
