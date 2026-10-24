@@ -1,7 +1,7 @@
 # ADR 0002: API chosen at bundle time; token transport enforced in the app
 
-- **Status:** Accepted. The token transport rule is on `main`; the switch
-  script `scripts/Set-ApiTarget.ps1` is proposed in pull request #9 (Phase 4A).
+- **Status:** Accepted. The token transport rule and
+  `scripts/Set-ApiTarget.ps1` are both on `main` (script merged in PR #9).
 - **Code:** `src/config/env.ts`, `src/api/http-client.ts`
   (`canSendBearerToken`), `scripts/Set-ApiTarget.ps1`
 

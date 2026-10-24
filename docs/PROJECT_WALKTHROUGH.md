@@ -18,8 +18,9 @@ the backend walkthrough:
 | **[In review]** | Implemented on an open pull request, not yet on `main`. |
 | **[Not implemented]** | Proposed or future work. Nothing in the code does this yet. |
 
-Last reviewed: 2026-10-24, against branch `feature/phase4a-api-environment-switch`
-(commit `e104927`) and the pull request descriptions that record device tests.
+Last reviewed: 2026-10-24, after API environment switching was merged into
+`main` through PR #9 (merge commit `9002823`; validated feature commit
+`e104927`). Device-test status is based on the recorded PR evidence.
 
 ---
 
@@ -36,7 +37,7 @@ The app has three operating modes:
 | Mode | When | Data |
 | --- | --- | --- |
 | Demo | `EXPO_PUBLIC_API_URL` not set | In-memory fake API (`src/api/demo-api.ts`), clearly labelled |
-| Live, signed out | API URL set, nobody signed in (always on web) | The API's original `/api/rooms` and `/api/bookings` |
+| Live, signed out | API URL set, nobody signed in (always on web) | Original `/api/rooms` and `/api/bookings` only when the backend's Development-only anonymous demo mode is enabled; otherwise the API requires sign-in |
 | Live, signed in | Android/iOS development build, signed in and registered | `/api/organizations/{id}/…` of the active organisation |
 
 ## 2. Structure
@@ -54,7 +55,7 @@ src/
   hooks/, utils/           Clock, date/time, search window, room fit
 tests/                     Node test runner (node:test), mirrors src/
 e2e/                       Playwright tests of the web build against the real .NET API
-scripts/Set-ApiTarget.ps1  Switch the development build between local and hosted API [In review]
+scripts/Set-ApiTarget.ps1  Switch the development build between local and hosted API [Manual]
 ```
 
 Navigation is plain React state (`AppScreens` switches between two screens),
@@ -163,7 +164,7 @@ is in the app, so it holds whatever `.env.local` contains. On a physical
 phone, `adb reverse tcp:5003 tcp:5003` makes the phone's `localhost:5003` the
 PC's `localhost:5003` over USB, so the token never crosses a network.
 
-### Choosing the API [In review]
+### Choosing the API [Tested]
 
 The whole decision is made in [`src/config/env.ts`](../src/config/env.ts), from
 one value:
@@ -217,8 +218,8 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | --- | --- | --- |
 | Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, date/time and search logic | 348 tests passed on 2026-10-24 |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-24 |
-| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24, in CI and locally against the Phase 4A backend branch (`E2E_BACKEND_DIR`) |
-| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` (the same fix reaches `main` through PR #11) |
+| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24, in CI and locally against the backend Phase 4A branch (now merged into backend `main`; `E2E_BACKEND_DIR`) |
+| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` (the matching dependencies were merged into `main` through PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
 | Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the README checklist *Needs a real login test on a physical phone* | [Manual], partly done. Recorded in pull request descriptions: the development build installed and started, Metro logged `roombookingdev://auth`, and `adb` delivered that deep link to `.MainActivity` (PR #6); `adb reverse` reached a `127.0.0.1`-only server on the PC (PR #7); a Hotmail login attempt was diagnosed from `logcat` as running in Expo Go, which led to `b322f98`. **No row of the README login checklist has been recorded as passed.** |
 
@@ -285,8 +286,8 @@ These cannot be verified on Windows, by CI or in the web build:
 - **Expo Doctor depends on Expo's live version list.** It compares the
   lockfile with the SDK 58 versions Expo publishes at run time, so a new Expo
   patch release can fail CI without any change here (it did on 2026-10-24;
-  fixed by `e104927`, which bumped only the two reported packages, and for
-  `main` by the byte-identical PR #11). This is
+  fixed by `e104927`, which bumped only the two reported packages, and on
+  `main` by the byte-identical, now merged PR #11). This is
   intended: it is the signal to update. The installed development build is
   older than that bump until it is rebuilt.
 - **No component tests and no ESLint configuration.** `npx expo lint` would
@@ -304,10 +305,9 @@ These cannot be verified on Windows, by CI or in the web build:
 
 ## 12. How this project was built
 
-This project was developed with AI assistance (Claude Code). As of
-2026-10-24, 30 of the 40 commits on `main` carry a `Co-Authored-By: Claude`
-trailer; 7 of the other 10 are GitHub merge commits. Commits without the
-trailer are not necessarily written without AI help.
+This project was developed with AI assistance (Claude Code). Some commits
+carry a `Co-Authored-By: Claude` trailer, but commit trailers alone do not
+measure the full extent of AI involvement.
 
 Every change is verified the same way regardless of who wrote it: type
 checking, the automated test suites and CI must pass, and behaviour on a
