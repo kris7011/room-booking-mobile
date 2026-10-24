@@ -7,7 +7,8 @@
 
 ## Context
 
-Phase 4A requires that Room Booking keeps working if paid hosting stops: the
+The project's local-portability milestone (internally "Phase 4A") requires
+that Room Booking keeps working if paid hosting stops: the
 same app must be able to talk to an HTTPS-hosted API **or** to the API running
 on the owner's PC. A bearer token sent over plain HTTP across a network can be
 read and replayed by anyone on that network.

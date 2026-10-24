@@ -19,7 +19,15 @@ the backend walkthrough:
 | **[Not implemented]** | Proposed or future work. Nothing in the code does this yet. |
 
 Last reviewed: 2026-10-24, against branch `feature/phase4a-api-environment-switch`
-(commit `e104927`) and the pull request descriptions that record device tests.
+(commit `e104927`) and the pull request descriptions that record device tests;
+links and documentation structure updated on `docs/public-portfolio-readiness`.
+
+**Related documents:** [local development](local-development.md) ·
+[Microsoft Entra sign-in](entra-login.md) · [organisations](organisations.md) ·
+[time handling](time-handling.md) · [testing and CI](testing.md) ·
+[Android development build](android-development-build.md) ·
+[device testing](device-testing.md) · [local/hosted API](api-targets.md) ·
+[dependency advisories](security-advisories.md) · [ADRs](adr/README.md)
 
 ---
 
@@ -217,10 +225,10 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | --- | --- | --- |
 | Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, date/time and search logic | 348 tests passed on 2026-10-24 |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-24 |
-| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24, in CI and locally against the Phase 4A backend branch (`E2E_BACKEND_DIR`) |
+| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24, in CI and locally against the branch of backend PR #13 (`E2E_BACKEND_DIR`) |
 | Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` (the same fix reaches `main` through PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
-| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the README checklist *Needs a real login test on a physical phone* | [Manual], partly done. Recorded in pull request descriptions: the development build installed and started, Metro logged `roombookingdev://auth`, and `adb` delivered that deep link to `.MainActivity` (PR #6); `adb reverse` reached a `127.0.0.1`-only server on the PC (PR #7); a Hotmail login attempt was diagnosed from `logcat` as running in Expo Go, which led to `b322f98`. **No row of the README login checklist has been recorded as passed.** |
+| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Recorded in pull request descriptions: the development build installed and started, Metro logged `roombookingdev://auth`, and `adb` delivered that deep link to `.MainActivity` (PR #6); `adb reverse` reached a `127.0.0.1`-only server on the PC (PR #7); a Hotmail login attempt was diagnosed from `logcat` as running in Expo Go, which led to `b322f98`. **No row of the sign-in checklist has been recorded as passed.** See [device-testing.md](device-testing.md#current-status). |
 
 **Not covered by automated tests:** React Native components on Android/iOS
 (there are no component tests; components are exercised only through the web
@@ -291,10 +299,14 @@ These cannot be verified on Windows, by CI or in the web build:
   older than that bump until it is rebuilt.
 - **No component tests and no ESLint configuration.** `npx expo lint` would
   first scaffold ESLint. Both are candidates for a separate PR.
-- **`npm audit` reports 5 high-severity advisories** (`node-forge` and `zod`
-  under `@expo/cli`). They are in the development tooling, not the app bundle,
-  and were present before Phase 4A; `npm audit fix --force` would change the
-  SDK.
+- **`npm audit` reports 5 high-severity findings** from 2 advisories
+  (`node-forge` and `zod` under `@expo/cli`). They are in the Expo CLI
+  tooling, not the app bundle, and were present before PR #9;
+  `npm audit fix --force` would downgrade the SDK. See
+  [security-advisories.md](security-advisories.md).
+- **No browser sign-in.** Neither this app's web build nor the Angular web
+  client in the backend repository signs users in; both use the API's
+  anonymous demo mode.
 - **iOS has never been built or tested.**
 - **Signed-in flows are not tested end to end**; they rely on unit tests with
   fakes and manual device checks.
