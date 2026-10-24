@@ -19,7 +19,7 @@ the backend walkthrough:
 | **[Not implemented]** | Proposed or future work. Nothing in the code does this yet. |
 
 Last reviewed: 2026-10-24, against branch `feature/phase4a-api-environment-switch`
-(commit `e104927`).
+(commit `e104927`) and the pull request descriptions that record device tests.
 
 ---
 
@@ -112,7 +112,9 @@ sequenceDiagram
 - **Public client with PKCE.** A mobile app cannot keep a secret, so there is
   none. PKCE binds the authorization code to this app instance: an
   intercepted code is useless without the code verifier. **[Tested]** with a
-  fake token endpoint; **[Manual]** against real Entra.
+  fake token endpoint. A complete sign-in against real Entra in the
+  development build has **not yet been run on a device** (see
+  [section 7](#still-requires-the-physical-android-device)).
 - **Where tokens live.** Only the refresh token is persisted, in SecureStore
   (`WHEN_UNLOCKED_THIS_DEVICE_ONLY` on iOS), split into chunks of at most
   1,800 characters because some platforms reject large values. The access
@@ -207,7 +209,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 - What the UI shows or hides (`canAdminister`, `canModify` from the API) is a
   **convenience only**. The API enforces every rule itself.
 - Invitation links: `roombookingdev://invitation?token=…` pre-fills the
-  accept form (`invitation-link.ts`). **[Tested]** parsing; **[Manual]** on a device.
+  accept form (`invitation-link.ts`). **[Tested]** parsing; not yet opened on a device.
 
 ## 7. Testing strategy
 
@@ -216,9 +218,9 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, date/time and search logic | 348 tests passed on 2026-10-24 |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-24 |
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24, in CI and locally against the Phase 4A backend branch (`E2E_BACKEND_DIR`) |
-| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` |
+| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` (the same fix reaches `main` through PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
-| Device | The checklist in the README, *Needs a real login test on a physical phone* | [Manual]; results are not recorded in the repository |
+| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the README checklist *Needs a real login test on a physical phone* | [Manual], partly done. Recorded in pull request descriptions: the development build installed and started, Metro logged `roombookingdev://auth`, and `adb` delivered that deep link to `.MainActivity` (PR #6); `adb reverse` reached a `127.0.0.1`-only server on the PC (PR #7); a Hotmail login attempt was diagnosed from `logcat` as running in Expo Go, which led to `b322f98`. **No row of the README login checklist has been recorded as passed.** |
 
 **Not covered by automated tests:** React Native components on Android/iOS
 (there are no component tests; components are exercised only through the web
@@ -231,7 +233,9 @@ sign-in).
 These cannot be verified on Windows, by CI or in the web build:
 
 1. Rebuild the development build (`npx expo run:android`), since `e104927`
-   updated native Expo modules, and confirm it starts and loads from Metro.
+   updated native Expo modules (`expo-modules-core`, `expo-dev-launcher`, …)
+   and changed the Android fingerprint from `0eeb969…` to `e671791…`
+   (`@expo/fingerprint`), and confirm it starts and loads from Metro.
 2. Microsoft sign-in in the system browser and the redirect back to
    `roombookingdev://auth`; registration on first sign-in.
 3. Refresh token persisted in SecureStore across an app restart; sign-out
@@ -257,7 +261,9 @@ These cannot be verified on Windows, by CI or in the web build:
 ## 9. Builds and deployment
 
 - **Development build:** `npx expo run:android` produces
-  `io.github.kris7011.roombooking.dev`. **[Manual]**, used on a Samsung phone.
+  `io.github.kris7011.roombooking.dev`. **[Manual]**, built and installed on a
+  Samsung SM-A057G (PR #6). The installed build predates `e104927` and must be
+  rebuilt before the next device test.
 - **Release/production builds: [Not implemented].** There is no `eas.json`,
   no release package ID, no release redirect URI registration, and no store
   configuration. A release build would send tokens over HTTPS only, so it
@@ -279,7 +285,8 @@ These cannot be verified on Windows, by CI or in the web build:
 - **Expo Doctor depends on Expo's live version list.** It compares the
   lockfile with the SDK 58 versions Expo publishes at run time, so a new Expo
   patch release can fail CI without any change here (it did on 2026-10-24;
-  fixed by `e104927`, which bumped only the two reported packages). This is
+  fixed by `e104927`, which bumped only the two reported packages, and for
+  `main` by the byte-identical PR #11). This is
   intended: it is the signal to update. The installed development build is
   older than that bump until it is rebuilt.
 - **No component tests and no ESLint configuration.** `npx expo lint` would
@@ -298,9 +305,9 @@ These cannot be verified on Windows, by CI or in the web build:
 ## 12. How this project was built
 
 This project was developed with AI assistance (Claude Code). As of
-2026-10-24, 31 of the 40 commits on `main` carry a `Co-Authored-By: Claude`
-trailer. Commits without the trailer are not necessarily written without AI
-help.
+2026-10-24, 30 of the 40 commits on `main` carry a `Co-Authored-By: Claude`
+trailer; 7 of the other 10 are GitHub merge commits. Commits without the
+trailer are not necessarily written without AI help.
 
 Every change is verified the same way regardless of who wrote it: type
 checking, the automated test suites and CI must pass, and behaviour on a
