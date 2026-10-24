@@ -52,7 +52,7 @@ The user interface is in Danish; code and documentation are in English.
 |---|---|---|---|
 | Search and booking without sign-in | Yes | Unit tests; E2E in the web build against the real API | Web: yes. Android: no result recorded |
 | Time handling | Yes | Unit tests; E2E with a controlled browser clock | Android checklist not run yet |
-| Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | **Not yet verified on a device** |
+| Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | Microsoft sign-in opened on Samsung; a personal Hotmail account was rejected. **No completed login verified** |
 | Organisations and administration | Yes, for signed-in users | Unit tests | **Not yet verified on a device** |
 | Switching between a local and a hosted API | Development builds only ([details](docs/api-targets.md)) | Script smoke test in CI | Windows PowerShell 5.1 on an isolated copy |
 | Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified. Must be rebuilt after the latest Expo patch update |
@@ -234,10 +234,11 @@ and [walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/doc
 
 ## Known limitations
 
-- **Device verification is incomplete.** Microsoft sign-in, the signed-in
-  organisation screens and the booking flow have not been verified on a
-  physical phone yet, and the installed development build must be rebuilt
-  first. See [device-testing.md](docs/device-testing.md).
+- **Device verification is incomplete.** Microsoft's login page opened on
+  Samsung, but the Hotmail attempt was rejected as a personal account. A
+  completed sign-in, signed-in organisation screens and mobile booking remain
+  unverified. The development build needs rebuilding before the next full
+  device test. See [device-testing.md](docs/device-testing.md).
 - **iOS has never been built.**
 - **No release builds.** There is no `eas.json`, release package ID, signing
   setup, release redirect URI or store configuration. The API address is

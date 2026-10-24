@@ -1,7 +1,7 @@
 # ADR 0002: API chosen at bundle time; token transport enforced in the app
 
-- **Status:** Accepted. The token transport rule is on `main`; the switch
-  script `scripts/Set-ApiTarget.ps1` is proposed in pull request #9 (Phase 4A).
+- **Status:** Accepted. The token transport rule and API-target switching
+  script are on `main` (script merged through PR #9).
 - **Code:** `src/config/env.ts`, `src/api/http-client.ts`
   (`canSendBearerToken`), `scripts/Set-ApiTarget.ps1`
 
@@ -36,8 +36,9 @@ read and replayed by anyone on that network.
 
 ## Consequences
 
-- Positive: a misconfigured `.env.local` cannot leak a token; the security
-  rule is unit-tested.
+- Positive: a plain-HTTP LAN API address in `.env.local` cannot receive a
+  bearer token; this transport rule is unit-tested. HTTPS destinations still
+  need to be trusted and configured correctly.
 - Positive: switching servers in development is one script call plus a Metro
   restart.
 - Negative: an installed release build cannot be pointed at another server

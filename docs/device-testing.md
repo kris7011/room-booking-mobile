@@ -9,9 +9,10 @@ Building and installing the development build is described in
 
 ## Current status
 
-All device checks so far used one phone, a **Samsung SM-A057G**, with the
-Android development build. Results are recorded in the pull request
-descriptions.
+Device checks have been reported on a **Samsung SM-A057G**, including
+development-build and Expo Go investigations. The PR descriptions provide
+the recorded technical checks; the later Microsoft login result was reported
+by the project owner.
 
 | Check | Result | Recorded in |
 |---|---|---|
@@ -19,15 +20,16 @@ descriptions.
 | Metro logs `[auth] Redirect URI: roombookingdev://auth` | Done | PR #6 |
 | `adb` delivers `roombookingdev://auth` to `.MainActivity` | Done | PR #6 |
 | `adb reverse tcp:5003 tcp:5003` reaches a `127.0.0.1`-only server on the PC | Done (tunnel only, without sign-in) | PR #7 |
-| [Sign-in checklist](#sign-in-checklist) | **Not done.** No row has been recorded as passed. A Hotmail sign-in attempt was diagnosed from `logcat` as running in Expo Go, which led to the Expo Go detection in `b322f98`. | PR #7 |
+| [Sign-in checklist](#sign-in-checklist) | **Incomplete.** An earlier attempt was diagnosed as Expo Go (`b322f98`). On a later Samsung attempt, Microsoft's sign-in page opened, but a Hotmail address was rejected with the message that a work or school account is required. No token, redirect, app session, registration or booking was confirmed. | PR #7; owner-reported Samsung test |
 | [Time-handling checklist](#time-handling-checklist) | **Not done** | PR #4, PR #5 |
 | Search and booking on the device, in demo or live mode | **No result recorded** | – |
 | Booking, organisation and administration screens with a signed-in user against the real API | **Not done** | PR #8 |
 | Local/hosted API switch with sign-in ([api-targets.md](api-targets.md)) | **Not done** | PR #9 |
 
-The installed development build is older than commit `e104927`, which
-updated native Expo modules. **Rebuild it** (`npm run android:dev-build`)
-before the next device test.
+The previously installed development build predates the native Expo-module
+updates in `e104927`. **Rebuild the development client** (`npm run android:dev-build`)
+before the next verified end-to-end device test. Check that the phone opens the
+Room Booking development build rather than Expo Go.
 
 iOS has never been built, on a simulator or a device.
 
@@ -61,9 +63,13 @@ npm run android:dev-build   # or, with the build installed: npx expo start --dev
 ## Sign-in checklist
 
 The automated tests cover the sign-in logic with fakes for the browser,
-Entra's token endpoint and SecureStore. These parts can only be checked on a
-device, with the development build and a real Microsoft account. The sign-in
-design is described in [entra-login.md](entra-login.md).
+Entra's token endpoint and SecureStore. Full authentication and token storage
+still require a verified run in the development build with a real Microsoft
+account. The later Hotmail rejection suggests checking both the configured
+`EXPO_PUBLIC_ENTRA_TENANT` (use `common` for personal accounts) and the Entra
+app registration's supported account types before repeating the test. A work
+or school account is a separate test path. The sign-in design is described in
+[entra-login.md](entra-login.md).
 
 | # | Test | Expected |
 |---|---|---|
