@@ -18,7 +18,8 @@ the backend walkthrough:
 | **[In review]** | Implemented on an open pull request, not yet on `main`. |
 | **[Not implemented]** | Proposed or future work. Nothing in the code does this yet. |
 
-Last reviewed: 2026-10-24, against branch `feature/phase4a-api-environment-switch`.
+Last reviewed: 2026-10-24, against branch `feature/phase4a-api-environment-switch`
+(commit `e104927`).
 
 ---
 
@@ -162,12 +163,31 @@ PC's `localhost:5003` over USB, so the token never crosses a network.
 
 ### Choosing the API [In review]
 
-`EXPO_PUBLIC_API_URL` is inlined into the JavaScript bundle by Metro.
-`scripts/Set-ApiTarget.ps1` changes only that line in `.env.local`:
-`-Mode Local` → `http://localhost:5003`, `-Mode Hosted -HostedUrl https://…`
-(HTTP, credentials, query strings and fragments are rejected). Metro must be
-restarted afterwards. An installed release build cannot switch servers; see
-[ADR 0002](adr/0002-api-target-and-token-transport.md).
+The whole decision is made in [`src/config/env.ts`](../src/config/env.ts), from
+one value:
+
+1. Metro reads `.env.local` when it starts and **inlines**
+   `process.env.EXPO_PUBLIC_API_URL` into the JavaScript bundle as a string
+   literal. Only that static dot notation is replaced, which is why `env.ts`
+   reads it exactly that way and nowhere else.
+2. `env.ts` trims it and strips trailing slashes → `apiBaseUrl`. Empty or
+   unset → `apiBaseUrl = null` → `isDemoMode = true`, and the app uses the
+   in-memory demo API (`ApiModeBanner` labels it).
+3. `buildUrl` in `http-client.ts` prefixes every path with `apiBaseUrl`.
+   `canSendBearerToken` (above) then decides per request whether the token may
+   go along: HTTPS always, plain HTTP only to loopback in a development bundle.
+
+`scripts/Set-ApiTarget.ps1` changes only the `EXPO_PUBLIC_API_URL` line in
+`.env.local` and leaves the Entra settings alone: `-Mode Local` →
+`http://localhost:5003`, `-Mode Hosted -HostedUrl https://…` (HTTP,
+credentials, query strings and fragments are rejected; duplicates of the key
+are refused without writing). Because the value is inlined, **Metro must be
+restarted with `--clear`** afterwards, and an installed release build can never
+switch servers; see [ADR 0002](adr/0002-api-target-and-token-transport.md).
+
+The two layers are deliberately separate: the script is a convenience that can
+be bypassed by editing `.env.local` by hand; `canSendBearerToken` is the
+security rule and holds whatever the file says.
 
 ## 6. Organisations and authorization in the app
 
@@ -195,13 +215,33 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | --- | --- | --- |
 | Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, date/time and search logic | 348 tests passed on 2026-10-24 |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-24 |
-| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24 |
-| Expo Doctor | Dependency versions match the SDK | Fails since 2026-10-24: two patch releases (see Known limitations) |
+| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24, in CI and locally against the Phase 4A backend branch (`E2E_BACKEND_DIR`) |
+| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` |
+| API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
 | Device | The checklist in the README, *Needs a real login test on a physical phone* | [Manual]; results are not recorded in the repository |
 
-**Not covered by automated tests:** React Native components on Android/iOS,
-the real Microsoft sign-in, SecureStore on a device, and signed-in
-organisation flows end to end (E2E runs the web build without sign-in).
+**Not covered by automated tests:** React Native components on Android/iOS
+(there are no component tests; components are exercised only through the web
+build in E2E), the real Microsoft sign-in, SecureStore on a device, and
+signed-in organisation flows end to end (E2E runs the web build without
+sign-in).
+
+### Still requires the physical Android device
+
+These cannot be verified on Windows, by CI or in the web build:
+
+1. Rebuild the development build (`npx expo run:android`), since `e104927`
+   updated native Expo modules, and confirm it starts and loads from Metro.
+2. Microsoft sign-in in the system browser and the redirect back to
+   `roombookingdev://auth`; registration on first sign-in.
+3. Refresh token persisted in SecureStore across an app restart; sign-out
+   clears it.
+4. `Set-ApiTarget.ps1 -Mode Local` + `adb reverse tcp:5003 tcp:5003`: signed-in
+   requests reach the PC's local API, with a **restored** database, and the
+   organisations, rooms, bookings and roles look as they did before.
+5. Token transport on the device: a plain-HTTP Wi-Fi address gets no token.
+6. Invitation deep link `roombookingdev://invitation?token=…`.
+7. Organisation switching and Owner/Admin/Member screens with real accounts.
 
 ## 8. Local development
 
@@ -236,9 +276,18 @@ organisation flows end to end (E2E runs the web build without sign-in).
 ## 11. Known limitations
 
 - **No release build pipeline** and no in-app server selection.
-- **Expo Doctor fails** in CI because `expo` 58.0.19 and `expo-dev-client`
-  58.0.15 were released after the last green run. Updating needs a new
-  development build on the device.
+- **Expo Doctor depends on Expo's live version list.** It compares the
+  lockfile with the SDK 58 versions Expo publishes at run time, so a new Expo
+  patch release can fail CI without any change here (it did on 2026-10-24;
+  fixed by `e104927`, which bumped only the two reported packages). This is
+  intended: it is the signal to update. The installed development build is
+  older than that bump until it is rebuilt.
+- **No component tests and no ESLint configuration.** `npx expo lint` would
+  first scaffold ESLint. Both are candidates for a separate PR.
+- **`npm audit` reports 5 high-severity advisories** (`node-forge` and `zod`
+  under `@expo/cli`). They are in the development tooling, not the app bundle,
+  and were present before Phase 4A; `npm audit fix --force` would change the
+  SDK.
 - **iOS has never been built or tested.**
 - **Signed-in flows are not tested end to end**; they rely on unit tests with
   fakes and manual device checks.
