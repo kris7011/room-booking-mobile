@@ -55,6 +55,16 @@ Without further setup the app starts in **demo mode**.
 
 Because `expo-dev-client` is installed, plain `npm start` now targets the development build. For Expo Go, use `npm run start:go` (or `npm run android:go`), or press `s` in the Expo terminal to switch.
 
+## Local API after stopping hosting (phase 4A)
+
+For an Expo development build on Samsung, the script
+`scripts/Set-ApiTarget.ps1` switches `EXPO_PUBLIC_API_URL` between
+`http://localhost:5003` (USB/ADB local .NET API) and an HTTPS-hosted API,
+without removing the Microsoft Entra settings in `.env.local`.
+Read [local/hosted API targets](docs/api-targets.md). An installed release
+APK still needs a new build to change its bundled URL; runtime server
+selection is future work.
+
 ## Demo API vs live API
 
 | | Demo mode | Live mode |

@@ -1,41 +1,44 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+# Engineering standards and project conventions
 
-## Expo has changed — do not trust your training data
+These rules apply to every implementation, refactor, test, review, commit, and PR.
+Preserve the application's working architecture unless an intentional change is agreed.
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+## Language and clean code
 
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
+- Use **English** for source code, identifiers, test names, comments, documentation, branches, commits, PRs, and code reviews. Preserve intentionally **Danish user-facing UI text** and other product translations.
+- Prefer readable, self-explanatory names, small cohesive functions, focused components, and clear boundaries. Apply SOLID, DRY, KISS, and separation of concerns pragmatically; do not introduce unnecessary abstractions, frameworks, or dependencies.
+- Choose the most appropriate architecture for this project's actual requirements, not the newest or most complicated pattern. Record significant decisions and trade-offs when changing the architecture.
+- Keep unrelated changes out of focused PRs. Prefer Conventional Commit messages and descriptive English PR explanations.
 
-## Commands
+## Expo SDK and React Native best practices
 
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
+- This is an **Expo SDK 58 / React Native / TypeScript** app (verify exact versions in `package.json`). Prioritize mobile-first UX, responsiveness, accessibility, performance, and Android/iOS compatibility.
+- Expo APIs change frequently. Before making version-sensitive changes, consult the **matching versioned Expo docs**: `https://docs.expo.dev/versions/v58.0.0/` (or the actual major version from `package.json`), and follow the linked current documentation. Do not rely on recalled APIs when they conflict with the installed SDK.
+- Use `npx expo install <package>` for Expo-compatible dependencies; use the project's configured package manager (`npm` with `package-lock.json`) for non-Expo tooling. Do not add packages without a demonstrated need.
+- The app currently uses **screen state / application screens**, not Expo Router. Preserve existing navigation and files in `src/screens/` and related components. Introduce Expo Router **only** after a deliberate architectural decision and migration plan; do not create `src/app/` routes by default.
+- Follow the repository's actual `package.json` scripts. Do not assume an `expo lint` command or an ESLint setup is present.
+- Native `ios/` and `android/` folders are generated when applicable. Use `app.json` and config plugins rather than editing generated files manually.
+- Expo Go does not support all native modules or the app's Microsoft deep-link login. Use a development build for those flows.
 
-```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
-```
+## TypeScript and component structure
 
-Run lint and typecheck before declaring any task done.
+- Keep TypeScript strict. Prefer precise types, discriminated unions, typed boundaries, and exhaustive cases; avoid `any`, unnecessary non-null assertions, and unsafe casts.
+- Keep React components presentation-focused; move networking to `src/api/`, authentication to `src/auth/`, organization orchestration to `src/organizations/`, and reusable UI to appropriate `src/components/` modules.
+- Use React hooks correctly (stable dependencies, cleanup, avoiding stale async state updates). Avoid unnecessary rerenders and expensive work during render, especially on resource-constrained physical Android devices.
+- Model explicit loading, empty, offline, auth-expired, validation, and error states. Provide accessible buttons, readable form errors, sensible keyboard behavior, and safe-area support.
 
-## Navigation & Routing
+## Security, multi-tenancy, and data preservation
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+- Only the authenticated .NET API decides identity, organization membership, and authorization. A UI visibility check is not authorization.
+- Never log, commit, or expose tokens, private data, or secrets. Refresh tokens belong in SecureStore; access tokens should remain in memory. Never put secrets in `EXPO_PUBLIC_*` variables.
+- Send bearer tokens to remote APIs over trusted HTTPS. The existing local `http://localhost:5003` allowance is for **development/USB ADB reverse only**; never weaken it for an arbitrary Wi-Fi IP.
+- Keep bookings, rooms, and state scoped to the selected organization; clear user-dependent state on logout or identity changes.
+- Do not destroy local files, reset databases, or erase another user's work. Keep cloud/local data migration explicit and verified; never imply that switching API URLs syncs data.
 
-## Building with EAS
+## Testing and delivery
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
-
-## Rules
-
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+- For behavior changes, add tests for success, failure, edge cases, security, and state transitions. Use the established `tests/` and `e2e/` structures.
+- Before completion, run: `npm run typecheck`, `npm test`, and `npx expo-doctor`. For user-visible booking/API-flow changes also run `npm run test:e2e` where supported, and check a physical Android device when native behavior changes.
+- Check the diff, installed dependencies, CI results, and docs. Do not claim a test passed until it did.
+- Keep PRs focused and reviewable; document risk, validation, and limitations in English. Do not merge or deploy without explicit authorization.
+- Preserve the option to use the same app with an HTTPS-hosted API or a locally hosted API; understand that Expo's `EXPO_PUBLIC_API_URL` is embedded at build/bundle time until an explicitly designed runtime selector is delivered.
