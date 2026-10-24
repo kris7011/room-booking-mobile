@@ -19,7 +19,7 @@ export function resolveAuthAvailability(
   redirectUri: string | null,
   runningInExpoGo = false,
 ): AuthAvailability {
-  // The Angular app owns Microsoft login in the browser.
+  // Microsoft login is not implemented in the browser.
   if (platform === 'web' || redirectUri === null) return { available: false, reason: 'web' };
   if (!configResult.configured) {
     return configResult.problem

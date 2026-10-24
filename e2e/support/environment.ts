@@ -43,7 +43,7 @@ export const DATABASE_PREFIX = 'room-booking-e2e-';
  * The tests never delete it, nor any other run's database. Playwright stops
  * the API only after every teardown hook has run, so a test hook cannot know
  * when the file is closed; another run may also still be using its own file.
- * README.md ("The isolated test database") describes safe manual cleanup.
+ * docs/testing.md ("Cleaning up test databases") describes safe manual cleanup.
  */
 export const DATABASE_PATH = (process.env.E2E_DATABASE_PATH ??= join(
   tmpdir(),

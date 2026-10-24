@@ -38,8 +38,8 @@ export const authRedirectUriOptions: Readonly<AuthRedirectUriOptions> = Object.f
 export type MakeRedirectUri = (options: AuthRedirectUriOptions) => string;
 
 /**
- * The redirect URI for this platform, or null on web: the Angular app owns
- * Microsoft login in the browser, and Expo web gets none.
+ * The redirect URI for this platform, or null on web: Microsoft login is
+ * not implemented in the browser.
  * `makeRedirectUri` is passed in so the rule can be tested without React Native.
  */
 export function resolveAuthRedirectUri(platform: string, makeRedirectUri: MakeRedirectUri): string | null {

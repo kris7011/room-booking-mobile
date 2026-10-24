@@ -4,11 +4,11 @@ import { API_URL } from '../support/environment';
 import { expect, test } from '../support/fixtures';
 import { ROOMS } from '../support/test-data';
 
-// Microsoft login lives in the Android/iOS app only (the Angular app owns it
-// in the browser). On web the account panel says so, no login is offered,
+// Microsoft login lives in the Android/iOS app only; it is not implemented in
+// the browser. On web the account panel says so, no login is offered,
 // and searching and booking work exactly as before, without any token.
-// The login flow itself needs a real phone: see "Microsoft Entra login" in
-// README.md.
+// The login flow itself needs a real phone: see docs/entra-login.md and
+// docs/device-testing.md.
 test.describe('Account panel on web', () => {
   test('explains that login is only in the mobile app and offers no login button', async ({ app, page }) => {
     await app.open();
