@@ -30,8 +30,17 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files; .env.example is the tracked, secret-free template
+.env
+.env.*
+!.env.example
+
+# Android signing credentials and release artifacts
+*.keystore
+keystore.properties
+credentials.json
+*.apk
+*.aab
 
 # typescript
 *.tsbuildinfo
