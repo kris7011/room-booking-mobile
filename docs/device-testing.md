@@ -11,8 +11,8 @@ Building and installing the development build is described in
 
 Device checks have been reported on a **Samsung SM-A057G**, including
 development-build and Expo Go investigations. The PR descriptions provide
-the recorded technical checks; the later Microsoft login result was reported
-by the project owner.
+the recorded technical checks. The Hotmail rejection is analysed in
+[Personal-account rejection, 23 October 2026](#personal-account-rejection-23-october-2026).
 
 | Check | Result | Recorded in |
 |---|---|---|
@@ -20,7 +20,7 @@ by the project owner.
 | Metro logs `[auth] Redirect URI: roombookingdev://auth` | Done | PR #6 |
 | `adb` delivers `roombookingdev://auth` to `.MainActivity` | Done | PR #6 |
 | `adb reverse tcp:5003 tcp:5003` reaches a `127.0.0.1`-only server on the PC | Done (tunnel only, without sign-in) | PR #7 |
-| [Sign-in checklist](#sign-in-checklist) | **Incomplete.** An earlier attempt was diagnosed as Expo Go (`b322f98`). On a later Samsung attempt, Microsoft's sign-in page opened, but a Hotmail address was rejected with the message that a work or school account is required. No token, redirect, app session, registration or booking was confirmed. | PR #7; owner-reported Samsung test |
+| [Sign-in checklist](#sign-in-checklist) | **Not verified.** Two Hotmail attempts on 23 October were rejected by Microsoft; both ran in Expo Go while the API registration did not allow personal accounts (see [below](#personal-account-rejection-23-october-2026)). A personal-account registration reached the local API later that day, but no device log of it exists. No checklist step has a recorded device result. | PR #7; issue #16 |
 | [Time-handling checklist](#time-handling-checklist) | **Not done** | PR #4, PR #5 |
 | Search and booking on the device, in demo or live mode | **No result recorded** | – |
 | Booking, organisation and administration screens with a signed-in user against the real API | **Not done** | PR #8 |
@@ -32,6 +32,58 @@ before the next verified end-to-end device test. Check that the phone opens the
 Room Booking development build rather than Expo Go.
 
 iOS has never been built, on a simulator or a device.
+
+### Personal-account rejection, 23 October 2026
+
+On the Samsung, Microsoft's sign-in page refused a Hotmail address with
+*Du kan ikke logge på her med en privat konto. Brug din arbejds- eller
+skolekonto i stedet.* Diagnosed on 25 October 2026 (issue #16) from the
+evidence below; times are UTC.
+
+| Time | Evidence | Source |
+|---|---|---|
+| 21 Oct 08:38 | API registration changed to work or school accounts only (`AzureADMultipleOrgs`) | Entra audit log |
+| 22 Oct 12:40 | Mobile registration changed to `AzureADandPersonalMicrosoftAccount` | Entra audit log |
+| 22 Oct 12:45 | Last change to `.env.local` in both local checkouts with Entra settings; both set `EXPO_PUBLIC_ENTRA_TENANT=common`. The code at the time (`be06021`) also defaulted to `common` | file timestamps, Git |
+| 23 Oct 06:59 and 07:02 | Two sign-ins opened `login.microsoftonline.com` from **Expo Go** (`host.exp.exponent`), not the development build | phone `logcat` |
+| 23 Oct 07:58 | API registration changed to `AzureADandPersonalMicrosoftAccount` | Entra audit log |
+| 23 Oct 10:29 | The local development database recorded one new identity with the personal-account issuer (tenant `9188040d-…`) | `UserIdentities.CreatedUtc` |
+
+**Cause:** during both attempts the **API registration** allowed work or
+school accounts only. The app requests the API's scope at sign-in, and
+Microsoft's `/common/` page then refuses personal accounts, even though the
+mobile registration and the authority allowed them. A read-only request to
+the `/authorize` endpoint confirmed the mechanism on 25 October: with this
+app's client ID on `/common/`, the page Microsoft serves allows personal and
+work accounts, but with the same client ID and a scope of a work-or-school-only
+Microsoft API, it allows work accounts only and shows the message above, exactly as
+the `/organizations/` page does. (This reads `iAllowedIdentities` and
+`fUseConsumerEmailError` from the page's `$Config`, which is not a documented
+interface.)
+
+**Contributing:** both attempts ran in Expo Go, where a sign-in can never
+finish, because Microsoft redirects to `roombookingdev://auth`. Since
+`b322f98` the app refuses sign-in in Expo Go.
+
+**Not the cause:** the authority (`/common/`), the mobile registration (it
+allowed personal accounts from 22 Oct 12:40), the redirect URI (registered
+as *Mobile and desktop applications*), and the app's code.
+
+**State on 25 October:** both registrations are
+`AzureADandPersonalMicrosoftAccount` with access token version 2. The API
+exposes `access_as_user`, which the mobile registration requests. The mobile
+registration has `roombookingdev://auth` as its only redirect URI and no
+client secret. Microsoft's `/consumers/` endpoint hands the request on to
+`login.live.com` without an error.
+
+**Still unverified:** the 10:29 identity shows that a personal-account access
+token was validated by the API, and the owner reported a successful Hotmail
+sign-in on the Samsung shortly afterwards. No `logcat` or screenshot of that
+run exists, so it does not count as a checklist result. No record of a Hotmail
+attempt after 23 Oct 07:02 was found. If the message appears again, write down
+the date and time, whether the app was **Room Booking** or Expo Go, and the
+`[auth] Microsoft login:` line, then run the
+[preflight](entra-login.md#preflight-check-both-registrations).
 
 ## Sign-in against a local API over USB
 
@@ -65,10 +117,10 @@ npm run android:dev-build   # or, with the build installed: npx expo start --dev
 The automated tests cover the sign-in logic with fakes for the browser,
 Entra's token endpoint and SecureStore. Full authentication and token storage
 still require a verified run in the development build with a real Microsoft
-account. The later Hotmail rejection suggests checking both the configured
-`EXPO_PUBLIC_ENTRA_TENANT` (use `common` for personal accounts) and the Entra
-app registration's supported account types before repeating the test. A work
-or school account is a separate test path. The sign-in design is described in
+account. Before testing, run the
+[preflight](entra-login.md#preflight-check-both-registrations) for **both** app
+registrations and check that the `[auth] Microsoft login:` line says `/common/`.
+Test a personal account and a work or school account separately. The sign-in design is described in
 [entra-login.md](entra-login.md).
 
 | # | Test | Expected |

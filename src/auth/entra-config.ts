@@ -145,11 +145,17 @@ export function expectedIssuer(tenantId: string): string {
   return `${ENTRA_INSTANCE}/${tenantId}/v2.0`;
 }
 
-/** Which Microsoft accounts the login page of `tenant` accepts, for the development log. */
+/**
+ * Which Microsoft accounts the login page of `tenant` accepts, for the
+ * development log. On "common" the authority alone does not decide it:
+ * Microsoft also refuses personal accounts, with the same message as on
+ * "organizations", when the mobile app's registration or the registration
+ * of a requested scope's API does not allow them.
+ */
 export function describeAccountTypes(tenant: string): string {
   switch (tenant.toLowerCase()) {
     case 'common':
-      return 'personal Microsoft accounts and work or school accounts';
+      return 'work or school accounts, and personal Microsoft accounts if the mobile and the API registration both allow them';
     case 'organizations':
       return 'work or school accounts only; Microsoft refuses personal accounts here';
     default:

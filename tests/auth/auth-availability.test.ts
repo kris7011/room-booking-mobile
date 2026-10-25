@@ -51,10 +51,13 @@ test('the development build is not mistaken for Expo Go', () => {
 
 test('the development log names the login page and the accounts it accepts, never the client ID', () => {
   const common = describeAuthAvailability(resolveAuthAvailability('android', configured, 'roombookingdev://auth'));
+  // /common refused a Hotmail address on a Samsung while the API registration
+  // still allowed work or school accounts only, so the line must not promise
+  // personal accounts on the strength of the authority alone.
   assert.equal(
     common,
     '[auth] Microsoft login: https://login.microsoftonline.com/common/oauth2/v2.0/authorize ' +
-      '(personal Microsoft accounts and work or school accounts)',
+      '(work or school accounts, and personal Microsoft accounts if the mobile and the API registration both allow them)',
   );
 
   const organizations = resolveEntraConfig({ clientId: TEST_CLIENT_ID, apiScope: TEST_API_SCOPE, tenant: 'organizations' });
