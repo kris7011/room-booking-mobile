@@ -74,7 +74,7 @@ test.describe('Searching for free rooms', () => {
     await app.moveStart('later');
     await app.expectTimeRange('08:30', '09:30');
     await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toBeVisible();
-    await expect(page.getByText(/De viste lokaler og en eventuel bookingformular gælder stadig/)).toContainText(
+    await expect(page.getByText(/De viste lokaler gælder stadig for/)).toContainText(
       DEFAULT_SLOT.label,
     );
     await expect(page.getByText(`${DEFAULT_SLOT.label} · mindste passende lokale først`)).toBeVisible();
