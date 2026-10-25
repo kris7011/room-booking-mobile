@@ -1,20 +1,30 @@
 # Screenshots
 
-This folder is reserved for real screenshots of the app, referenced from the
-main [README](../../README.md). It holds none yet: the app has not been
-captured on a device, and mock-ups or generated images are not used.
+This folder contains genuine captures of the Room Booking user interface.
+The three current screenshots were **cropped from developer-provided Chrome
+screenshots** of the Expo Web app in a 390 × 844 CSS-pixel emulated mobile
+viewport. Chrome's toolbar and DevTools are excluded. No UI was redrawn or
+generated, and the images show the **web demo**, not native Android.
 
-## Planned captures
+The source screenshots were displayed at a reduced scale; these crops retain
+that resolution rather than inventing image detail.
+
+## Available screenshots
 
 | File | Screen | Mode |
 |---|---|---|
-| `search.png` | Search form with participants, day and time | Demo mode |
-| `results.png` | Free rooms, smallest fitting first | Demo mode |
-| `booking-form.png` | Booking form, including a validation message | Demo mode |
-| `organisation-panel.png` | Signed-in account and active organisation | Test organisation and test account |
+| `search.png` | Search form: participants, day and time | Expo Web, demo mode |
+| `results.png` | Two available demo rooms, including capacity | Expo Web, demo mode |
+| `booking-form.png` | Booking form opened for Focus Room | Expo Web, demo mode |
 
-Capture them from the Android development build (or the web build at a
-phone-sized viewport), as PNG, about 1080 px wide or less.
+## Still to capture
+
+| File | Screen | Mode |
+|---|---|---|
+| `organisation-panel.png` | Signed-in account and active organisation | Native development build, with a fictional test organisation and test account |
+
+The native Android development build and complete Microsoft sign-in remain
+unverified end to end. Do not imply otherwise when using these images.
 
 ## Before committing a screenshot
 

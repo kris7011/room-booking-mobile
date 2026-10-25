@@ -9,9 +9,18 @@ ASP.NET Core API. Find a free meeting room for a number of people, a day and
 a time, and book it from an Android phone or a browser. Optional Microsoft
 Entra ID sign-in gives access to organisations and their rooms.
 
-<!-- Screenshots: add real captures here once they exist. Planned files and
-     the rules for capturing them (no personal data, no mock-ups) are in
-     docs/images/README.md. -->
+## Screenshots — web demo mode
+
+Actual Room Booking UI captured in Chrome's mobile viewport (390 × 844 CSS pixels),
+cropped to remove the browser and DevTools. These are **Expo Web demo-mode**
+captures, not screenshots of the native Android build. Data is fictional and
+no Microsoft account is signed in.
+
+| Search for a room | Available rooms | Booking form |
+| :---: | :---: | :---: |
+| <img src="docs/images/search.png" alt="Demo room search with participants, date and time" width="235"> | <img src="docs/images/results.png" alt="Demo search results showing Focus Room and Board Room" width="235"> | <img src="docs/images/booking-form.png" alt="Demo booking form for Focus Room" width="235"> |
+
+Capture provenance and safety guidance: [screenshots documentation](docs/images/README.md).
 
 ## Purpose
 
