@@ -206,7 +206,7 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
         <StatusMessage
           variant="warning"
           title="Resultater fra tidligere søgning"
-          message={`De viste lokaler og en eventuel bookingformular gælder stadig for ${formatRange(searched.start, searched.end)} med ${searched.participants} deltagere. Søgefelterne viser nu andre valg. Vælg et gyldigt tidspunkt, og søg igen for opdaterede resultater.`}
+          message={`De viste lokaler gælder stadig for ${formatRange(searched.start, searched.end)} med ${searched.participants} deltagere. Søgefelterne viser nu andre valg. Du kan først booke, når du har søgt igen for det nye tidspunkt og antal deltagere.`}
         />
       ) : null}
 
@@ -217,6 +217,7 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
           end={searched.end}
           participants={searched.participants}
           selectedRoomId={selectedRoomId}
+          outdated={showingPreviousSearch}
           onSelectRoom={setSelectedRoomId}
           onRetry={() => {
             if (searchedCriteria) void runSearch(searchedCriteria);

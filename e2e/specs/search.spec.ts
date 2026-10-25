@@ -74,7 +74,7 @@ test.describe('Searching for free rooms', () => {
     await app.moveStart('later');
     await app.expectTimeRange('08:30', '09:30');
     await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toBeVisible();
-    await expect(page.getByText(/De viste lokaler og en eventuel bookingformular gælder stadig/)).toContainText(
+    await expect(page.getByText(/De viste lokaler gælder stadig for/)).toContainText(
       DEFAULT_SLOT.label,
     );
     await expect(page.getByText(`${DEFAULT_SLOT.label} · mindste passende lokale først`)).toBeVisible();
@@ -82,6 +82,50 @@ test.describe('Searching for free rooms', () => {
     await app.search();
     await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Man 4. mar, 08:30–09:30 · mindste passende lokale først')).toBeVisible();
+  });
+
+  test('blocks stale booking confirmation and retains a typed draft after searching again', async ({
+    app,
+    page,
+  }) => {
+    const bookingRequests = app.recordBookingRequests();
+    await app.search();
+    await app.openBookingForm(ROOMS.focus);
+    await app.fillBookingForm('Sprint planning', 'E2E');
+
+    await app.moveStart('later');
+    await app.expectTimeRange('08:30', '09:30');
+    await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toBeVisible();
+    await expect(page.getByText('Søg igen før booking', { exact: true })).toBeVisible();
+    await expect(app.confirmButton).toBeDisabled();
+    await expect(app.titleInput).toHaveValue('Sprint planning');
+    await expect(app.bookedByInput).toHaveValue('E2E');
+
+    // Old results remain visible, but are no longer actionable room buttons.
+    await expect(app.resultCards).toHaveCount(0);
+
+    await app.search();
+    await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toHaveCount(0);
+    await app.openBookingForm(ROOMS.focus);
+    await expect(app.titleInput).toHaveValue('Sprint planning');
+    await expect(app.bookedByInput).toHaveValue('E2E');
+    await expect(app.confirmButton).toBeEnabled();
+    expect(bookingRequests).toHaveLength(0);
+  });
+
+  test('makes old room cards read-only when the participant count changes', async ({
+    app,
+    page,
+  }) => {
+    await app.search();
+    await app.chooseParticipants(8);
+    await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toBeVisible();
+    await expect(app.resultCards).toHaveCount(0);
+
+    const response = await app.search();
+    expect(new URL(response.url()).searchParams.get('minCapacity')).toBe('8');
+    await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toHaveCount(0);
+    await expect(app.resultCards).toHaveText([/Collaboration Room/, /Board Room/]);
   });
 
   test('only lists rooms with room for the chosen number of participants', async ({ app }) => {
