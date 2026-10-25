@@ -102,7 +102,7 @@ The Metro terminal then shows:
 
 ```
 [auth] Redirect URI: roombookingdev://auth
-[auth] Microsoft login: https://login.microsoftonline.com/common/oauth2/v2.0/authorize (personal Microsoft accounts and work or school accounts)
+[auth] Microsoft login: https://login.microsoftonline.com/common/oauth2/v2.0/authorize (work or school accounts, and personal Microsoft accounts if the mobile and the API registration both allow them)
 ```
 
 These lines are written at start (and on every reload, `r`) in development only; they contain no client ID, code or token, and nothing else about sign-in is logged. In Expo Go the second line reads `[auth] Microsoft login unavailable: expo-go (…)`.
