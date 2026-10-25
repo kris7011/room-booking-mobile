@@ -16,6 +16,8 @@ interface SearchResultsProps {
   end: Date;
   participants: number;
   selectedRoomId: number | null;
+  /** Results remain visible but cannot be selected until a new search. */
+  outdated: boolean;
   onSelectRoom: (roomId: number | null) => void;
   onRetry: () => void;
   onBooked: (booking: BookingResponse) => void;
@@ -28,6 +30,7 @@ export function SearchResults({
   end,
   participants,
   selectedRoomId,
+  outdated,
   onSelectRoom,
   onRetry,
   onBooked,
@@ -76,11 +79,12 @@ export function SearchResults({
                   room={room}
                   participants={participants}
                   selected={selected}
-                  onPress={() => onSelectRoom(selected ? null : room.id)}
+                  onPress={outdated ? undefined : () => onSelectRoom(selected ? null : room.id)}
                 />
                 {selected ? (
                   <BookingForm
                     {...bookingForm}
+                    outdated={outdated}
                     room={room}
                     start={start}
                     end={end}

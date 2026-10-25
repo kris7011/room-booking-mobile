@@ -35,6 +35,8 @@ export interface BookingFormContext {
 
 interface BookingFormProps extends BookingFormContext {
   room: MeetingRoom;
+  /** The search inputs changed after this booking window was fetched. */
+  outdated: boolean;
   start: Date;
   end: Date;
   onBooked: (booking: BookingResponse) => void;
@@ -44,6 +46,7 @@ interface BookingFormProps extends BookingFormContext {
 export function BookingForm({
   api,
   room,
+  outdated,
   start,
   end,
   draft,
@@ -67,7 +70,7 @@ export function BookingForm({
 
   const submit = async () => {
     setShowValidation(true);
-    if (!isValid || started || submitting) return;
+    if (!isValid || started || outdated || submitting) return;
 
     // The screen's clock only ticks at slot boundaries and a timer can be
     // late, so check the time again right before sending.
@@ -142,6 +145,12 @@ export function BookingForm({
           actionLabel={started.actionLabel}
           onAction={onChooseNewTime}
         />
+      ) : outdated ? (
+        <StatusMessage
+          variant="warning"
+          title="Søg igen før booking"
+          message="Søgetidspunktet eller antal deltagere er ændret. Søg igen, før du kan bekræfte en booking. Titel og navn bevares."
+        />
       ) : error ? (
         <StatusMessage variant="error" title="Bookingen blev ikke oprettet" message={error} />
       ) : null}
@@ -151,7 +160,7 @@ export function BookingForm({
           <PrimaryButton label="Annuller" onPress={onCancel} variant="secondary" disabled={submitting} />
         </View>
         <View style={styles.action}>
-          <PrimaryButton label="Bekræft booking" onPress={submit} loading={submitting} disabled={started !== null} />
+          <PrimaryButton label="Bekræft booking" onPress={submit} loading={submitting} disabled={started !== null || outdated} />
         </View>
       </View>
     </View>
