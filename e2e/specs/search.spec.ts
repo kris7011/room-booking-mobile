@@ -63,6 +63,27 @@ test.describe('Searching for free rooms', () => {
     expect(new URL(response.url()).searchParams.get('startUtc')).toBe(`2030-03-${day}T07:00:00.000Z`);
   });
 
+  test('marks previous search results after changing the time, then clears the warning after a new search', async ({
+    app,
+    page,
+  }) => {
+    await app.search();
+    await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toHaveCount(0);
+
+    // Changing the picker must not relabel previously fetched availability.
+    await app.moveStart('later');
+    await app.expectTimeRange('08:30', '09:30');
+    await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toBeVisible();
+    await expect(page.getByText(/De viste lokaler og en eventuel bookingformular gælder stadig/)).toContainText(
+      DEFAULT_SLOT.label,
+    );
+    await expect(page.getByText(`${DEFAULT_SLOT.label} · mindste passende lokale først`)).toBeVisible();
+
+    await app.search();
+    await expect(page.getByText('Resultater fra tidligere søgning', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Man 4. mar, 08:30–09:30 · mindste passende lokale først')).toBeVisible();
+  });
+
   test('only lists rooms with room for the chosen number of participants', async ({ app }) => {
     await app.chooseParticipants(8);
     const response = await app.search();
