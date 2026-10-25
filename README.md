@@ -11,14 +11,15 @@ Entra ID sign-in gives access to organisations and their rooms.
 
 ## Screenshots — web demo mode
 
-Actual Room Booking UI captured in Chrome's mobile viewport (390 × 844 CSS pixels),
-cropped to remove the browser and DevTools. These are **Expo Web demo-mode**
-captures, not screenshots of the native Android build. Data is fictional and
-no Microsoft account is signed in.
+Actual Room Booking UI captured in Chrome's mobile viewport
+(390 × 844 CSS pixels, exported as 780 × 1688 PNGs). These are
+**Expo Web demo-mode** captures, not screenshots of the native
+Android build. Data is fictional and no Microsoft account is signed in.
+Click a screenshot to see the full-size image.
 
-| Search for a room | Available rooms | Booking form |
+| Search for a room | Available rooms | Booking form & validation |
 | :---: | :---: | :---: |
-| <img src="docs/images/search.png" alt="Demo room search with participants, date and time" width="235"> | <img src="docs/images/results.png" alt="Demo search results showing Focus Room and Board Room" width="235"> | <img src="docs/images/booking-form.png" alt="Demo booking form for Focus Room" width="235"> |
+| <a href="docs/images/search.png"><img src="docs/images/search.png" alt="Expo Web demo: room search with participants, date and time" width="235"></a> | <a href="docs/images/results.png"><img src="docs/images/results.png" alt="Expo Web demo: search results for Focus Room and Board Room" width="235"></a> | <a href="docs/images/booking-form.png"><img src="docs/images/booking-form.png" alt="Expo Web demo: booking form for Focus Room showing a passed-start-time warning" width="235"></a> |
 
 Capture provenance and safety guidance: [screenshots documentation](docs/images/README.md).
 

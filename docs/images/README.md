@@ -1,13 +1,16 @@
 # Screenshots
 
 This folder contains genuine captures of the Room Booking user interface.
-The three current screenshots were **cropped from developer-provided Chrome
-screenshots** of the Expo Web app in a 390 × 844 CSS-pixel emulated mobile
-viewport. Chrome's toolbar and DevTools are excluded. No UI was redrawn or
-generated, and the images show the **web demo**, not native Android.
+The three current screenshots were **captured directly from Chrome's
+mobile viewport** (390 × 844 CSS pixels at device pixel ratio 2,
+producing 780 × 1688 PNG files) and provided by the project owner.
+The browser toolbar and DevTools do not appear in these captures.
+The PNGs were optimized losslessly for GitHub (opaque alpha removed);
+the visible pixel colors were retained. No UI was drawn, generated
+or reconstructed.
 
-The source screenshots were displayed at a reduced scale; these crops retain
-that resolution rather than inventing image detail.
+They show the **Expo Web demo**, not native Android, and include
+only fictional room data.
 
 ## Available screenshots
 
@@ -15,7 +18,7 @@ that resolution rather than inventing image detail.
 |---|---|---|
 | `search.png` | Search form: participants, day and time | Expo Web, demo mode |
 | `results.png` | Two available demo rooms, including capacity | Expo Web, demo mode |
-| `booking-form.png` | Booking form opened for Focus Room | Expo Web, demo mode |
+| `booking-form.png` | Focus Room booking form, showing passed-start-time validation (not a completed booking) | Expo Web, demo mode |
 
 ## Still to capture
 
@@ -25,6 +28,12 @@ that resolution rather than inventing image detail.
 
 The native Android development build and complete Microsoft sign-in remain
 unverified end to end. Do not imply otherwise when using these images.
+
+The images are captures of distinct UI states, not a single successful
+end-to-end booking. In the results and booking-form captures, the previous
+search result is for 12:30–13:30 while the time selector shows 13:00–14:00.
+The form also shows the app's warning that the earlier booking start
+has passed. A completed booking is **not** pictured.
 
 ## Before committing a screenshot
 
