@@ -167,6 +167,18 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
     participants: searchedCriteria.participants,
   };
 
+  // The picker follows the clock until the user selects a day or time,
+  // whereas fetched results deliberately keep the criteria used for that search.
+  // Explicitly label that difference so a previously found slot is not mistaken
+  // for availability at the newly displayed time or participant count.
+  const showingPreviousSearch =
+    searchedCriteria !== null &&
+    search.status === 'success' &&
+    (searchedCriteria.day.getTime() !== searchWindow.day.getTime() ||
+      searchedCriteria.startMinutes !== searchWindow.startMinutes ||
+      searchedCriteria.endMinutes !== searchWindow.endMinutes ||
+      searchedCriteria.participants !== participants);
+
   return (
     <View style={styles.area}>
       <SearchForm
@@ -187,6 +199,14 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
             new Date(lastBooking.startUtc),
             new Date(lastBooking.endUtc),
           )}. Booking nr. ${lastBooking.id}.`}
+        />
+      ) : null}
+
+      {showingPreviousSearch && searched ? (
+        <StatusMessage
+          variant="warning"
+          title="Resultater fra tidligere søgning"
+          message={`De viste lokaler og en eventuel bookingformular gælder stadig for ${formatRange(searched.start, searched.end)} med ${searched.participants} deltagere. Søgefelterne viser nu andre valg. Vælg et gyldigt tidspunkt, og søg igen for opdaterede resultater.`}
         />
       ) : null}
 
