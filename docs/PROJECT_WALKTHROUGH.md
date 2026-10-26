@@ -217,6 +217,16 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
   only ever describe the organisation it was asked for.
 - What the UI shows or hides (`canAdminister`, `canModify` from the API) is a
   **convenience only**. The API enforces every rule itself.
+- **The only Owner** (`memberActions`, `isSoleOwner` in `permissions.ts`): in a
+  loaded member list, the Owner who is the only one is offered neither role
+  chips for themselves nor *Forlad organisationen*, but a Danish explanation
+  (`describeSoleOwner`) of how to make someone else Owner first. With several
+  Owners both stay available. Nothing is offered while the list is loading or
+  failed. `MembersSection` drops a list response for an organisation the user
+  has switched away from, and reloads the list after a refused change, since
+  the list may be out of date (another device); the API's `409 last_owner`
+  stays the final word. **[Tested]** rules (`organization-rules.test.ts`);
+  the screen itself is not covered by an automated test.
 - Invitation links: `roombookingdev://invitation?token=…` pre-fills the
   accept form (`invitation-link.ts`). **[Tested]** parsing; not yet opened on a device.
 
