@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck, tests and Expo Doctor
+    name: Typecheck, lint, tests and Expo Doctor
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -60,6 +60,10 @@ jobs:
 
       - name: Type-check app and tests
         run: npm run typecheck
+
+      # Fails on any ESLint error or warning (eslint.config.js).
+      - name: Lint
+        run: npm run lint
 
       - name: Run tests
         run: npm test

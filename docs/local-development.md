@@ -68,6 +68,7 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 | `npm run android:go` | Start and open the app in Expo Go on a connected Android device or emulator |
 | `npm run android:dev-build` | Build the Android development build locally, install it and start Metro (`expo run:android`) |
 | `npm run typecheck` | Type-check the app (`tsconfig.json`), the tests (`tsconfig.test.json`) and the E2E tests (`e2e/tsconfig.json`) |
+| `npm run lint` | ESLint over app, tests and E2E code (`eslint.config.js`); fails on any error or warning |
 | `npm test` | Compile and run the unit and integration tests |
 | `npm run test:e2e` | Start the API and the web app, run the end-to-end tests, stop both again |
 | `npm run test:e2e:report` | Open the HTML report of the last E2E run |
@@ -146,6 +147,6 @@ scripts/
 docs/                    Developer documentation and architecture decision records
 tsconfig.test.json       Compiles src/**/*.ts and tests/ to .test-build/
 .github/workflows/
-  ci.yml                 Fast checks: API target script smoke test, typecheck, tests, Expo Doctor
+  ci.yml                 Fast checks: API target script smoke test, typecheck, lint, tests, Expo Doctor
   e2e.yml                End-to-end tests against the real API
 ```
