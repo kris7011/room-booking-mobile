@@ -38,7 +38,9 @@ export function MembersSection({
   // A response for an organisation the user has since switched away from is
   // dropped, so one organisation's members are never shown under another.
   const shownOrganization = useRef(organization.publicId);
-  shownOrganization.current = organization.publicId;
+  useEffect(() => {
+    shownOrganization.current = organization.publicId;
+  }, [organization.publicId]);
 
   const load = useCallback(async () => {
     const organizationId = organization.publicId;
