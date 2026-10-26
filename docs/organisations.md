@@ -9,9 +9,15 @@ Android/iOS app (see [entra-login.md](entra-login.md)). The user interface
 below is in Danish.
 
 **Status:** implemented and unit-tested (`tests/organizations/`,
-`tests/api/organizations-api.test.ts`). The screens have not been exercised
-with a signed-in user on a device yet, and the web E2E tests run without
-sign-in (see [device-testing.md](device-testing.md#current-status)).
+`tests/api/organizations-api.test.ts`); the web E2E tests run without sign-in.
+On 26 October 2026 the Owner's screens were checked on a Samsung with a
+signed-in personal account: switching organisations, rooms, invitations,
+renaming, and the last-Owner refusal (see the
+[checklist](device-testing.md#organisation-administration-checklist-26-october-2026)).
+The Admin and Member views and accepting an invitation were not tried on a
+device (one account only). Every role rule is enforced by the API and covered
+by its integration tests: see its
+[role and permission matrix](https://github.com/kris7011/meeting-room-booking/blob/main/docs/role-permission-matrix.md).
 
 ## What the user sees
 
