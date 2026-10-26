@@ -61,11 +61,12 @@ The user interface is in Danish; code and documentation are in English.
 | Area | Implemented | Automated tests | Checked by hand |
 |---|---|---|---|
 | Search and booking without sign-in | Yes | Unit tests; E2E in the web build against the real API | Web: yes. Android: no result recorded |
+| Signed-in search and booking | Yes | Unit tests (API client against a mocked `fetch`) | Samsung, 26 Oct 2026: booking in an organisation, kept after restart (owner report) |
 | Time handling | Yes | Unit tests; E2E with a controlled browser clock | Android checklist not run yet |
-| Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | Microsoft sign-in opened on Samsung; a personal Hotmail account was rejected. **No completed login verified** |
-| Organisations and administration | Yes, for signed-in users | Unit tests | **Not yet verified on a device** |
+| Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | Samsung development build, 26 Oct 2026: `/common/` authority and redirect handler configured, personal-account session restored after a restart (logged); sign-out and a new interactive sign-in (owner report). Work or school account not tried |
+| Organisations and administration | Yes, for signed-in users | Unit tests; role rules enforced and tested in the API | Samsung, 26 Oct 2026: Owner screens and actions (writes on an isolated database copy). Admin and Member views not tried (one account only) |
 | Switching between a local and a hosted API | Development builds only ([details](docs/api-targets.md)) | Script smoke test in CI | Windows PowerShell 5.1 on an isolated copy |
-| Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified. Must be rebuilt after the latest Expo patch update |
+| Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified; rebuilt after the latest Expo patch update (26 Oct 2026) |
 | iOS | Shared code only | – | Never built |
 | Release builds and store distribution | No | – | – |
 
@@ -244,11 +245,12 @@ and [walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/doc
 
 ## Known limitations
 
-- **Device verification is incomplete.** Microsoft's login page opened on
-  Samsung, but the Hotmail attempt was rejected as a personal account. A
-  completed sign-in, signed-in organisation screens and mobile booking remain
-  unverified. The development build needs rebuilding before the next full
-  device test. See [device-testing.md](docs/device-testing.md).
+- **Device verification covers one phone and one account.** Sign-in,
+  session restore, booking and the Owner's administration were checked on a
+  Samsung with a personal Microsoft account. Work or school accounts, a new
+  user's first sign-in, the Admin and Member views, invitation links, the
+  time-handling checklist and token renewal after an hour were not. See
+  [device-testing.md](docs/device-testing.md).
 - **iOS has never been built.**
 - **No release builds.** There is no `eas.json`, release package ID, signing
   setup, release redirect URI or store configuration. The API address is

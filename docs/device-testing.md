@@ -9,29 +9,109 @@ Building and installing the development build is described in
 
 ## Current status
 
-Device checks have been reported on a **Samsung SM-A057G**, including
-development-build and Expo Go investigations. The PR descriptions provide
-the recorded technical checks. The Hotmail rejection is analysed in
-[Personal-account rejection, 23 October 2026](#personal-account-rejection-23-october-2026).
+The successful checks of 26 October 2026 ran on one **Samsung SM-A057G**
+(Android) with the **development build**
+(`io.github.kris7011.roombooking.dev`, not Expo Go), signed in with the
+owner's **personal Microsoft account**, against the local API over USB
+(`adb reverse`, see [below](#sign-in-against-a-local-api-over-usb)). Only one
+Microsoft account was available. The earlier, unsuccessful sign-in attempts
+of 23 October ran in **Expo Go**; their timeline is kept separately under
+[Personal-account rejection](#personal-account-rejection-23-october-2026).
 
-| Check | Result | Recorded in |
+Each result says where it comes from:
+
+- **Owner report**: the owner did the step by hand and reported the outcome
+  (issue #16, 26 October 2026). Nothing independent was recorded for that
+  step.
+- **Logged**: an independent technical observation recorded over `adb`
+  (`logcat`, screen captures, the API's log or database). It covers only
+  what the record shows, not a manual step done outside it. The captures show
+  personal data and were not kept.
+- **PR #n**: recorded in that pull request's description.
+
+| Check | Result | Evidence |
 |---|---|---|
-| Development build built (`expo run:android`), installed and started | Done, 22 October 2026 | PR #6 |
-| Metro logs `[auth] Redirect URI: roombookingdev://auth` | Done | PR #6 |
-| `adb` delivers `roombookingdev://auth` to `.MainActivity` | Done | PR #6 |
-| `adb reverse tcp:5003 tcp:5003` reaches a `127.0.0.1`-only server on the PC | Done (tunnel only, without sign-in) | PR #7 |
-| [Sign-in checklist](#sign-in-checklist) | **Not verified.** Two Hotmail attempts on 23 October were rejected by Microsoft; both ran in Expo Go while the API registration did not allow personal accounts (see [below](#personal-account-rejection-23-october-2026)). A personal-account registration reached the local API later that day, but no device log of it exists. No checklist step has a recorded device result. | PR #7; issue #16 |
-| [Time-handling checklist](#time-handling-checklist) | **Not done** | PR #4, PR #5 |
-| Search and booking on the device, in demo or live mode | **No result recorded** | – |
-| Booking, organisation and administration screens with a signed-in user against the real API | **Not done** | PR #8 |
-| Local/hosted API switch with sign-in ([api-targets.md](api-targets.md)) | **Not done** | PR #9 |
+| Development build built (`expo run:android`), installed and started | Passed, 22 October; rebuilt after `e104927` and installed again, 26 October | PR #6; logged |
+| Metro logs `[auth] Redirect URI: roombookingdev://auth`; `adb` delivers that link to `.MainActivity` | Passed | PR #6 |
+| Sign-in configuration in the running development build: package `io.github.kris7011.roombooking.dev`, authority `/common/`, `roombookingdev://auth` registered as the redirect handler | **Passed**, 26 October | logged (`logcat`) |
+| A new interactive Microsoft sign-in with the personal account on `/common/`: the browser returns to the development build via `roombookingdev://auth` | **Passed**, 26 October | owner report. No `logcat` of this sign-in was captured |
+| The app shows the personal account and *Registreret i Room Booking som …* (restored authenticated state) | **Passed**, 26 October | logged |
+| Session restored after the app is closed completely (`am force-stop`, and reopened from the launcher), same user, no new browser sign-in | **Passed**, 26 October | logged (several cold starts); owner report |
+| **Log ud**, then a new interactive sign-in with the same account | **Passed**, 26 October | owner report |
+| Existing memberships (Legacy and Test ApS, role *Ejer*) shown after sign-in | **Passed**, 26 October | owner report; logged |
+| Signed-in booking in Test ApS: search, book, see it in *Kommende bookinger*, still there after restarting the app | **Passed**, 26 October | owner report. The booking was on screen during the checks below (logged, read only) |
+| [Organisation administration as Owner](#organisation-administration-checklist-26-october-2026) | **Passed**, 26 October; Admin, Member and invitee views not run | logged |
+| Signed-in requests to a `127.0.0.1`-only API through `adb reverse tcp:5003 tcp:5003` | **Passed**, 26 October | logged (API log) |
+| Work or school account sign-in | **Not run**: no such account available | – |
+| First sign-in of a new, unregistered account | **Not run**: needs a second account | – |
+| Remaining [sign-in checklist](#sign-in-checklist) steps 2, 3, 6, 7, 8, 10, 11, 12 (consent, cancel, silent renewal after an hour, offline start, revoked session, SecureStore contents, logs free of tokens, Expo Go message) | **Not run** | – |
+| [Invitation link](#invitation-links) opened on the device | **Not run** | – |
+| [Time-handling checklist](#time-handling-checklist) | **Not run** | PR #4, PR #5 |
+| Hosted HTTPS API with sign-in ([api-targets.md](api-targets.md)) | **Not run** | PR #9 |
 
-The previously installed development build predates the native Expo-module
-updates in `e104927`. **Rebuild the development client** (`npm run android:dev-build`)
-before the next verified end-to-end device test. Check that the phone opens the
-Room Booking development build rather than Expo Go.
+iOS has never been built, on a simulator or a device. No release build exists.
 
-iOS has never been built, on a simulator or a device.
+The automated tests do not replace these checks: the unit tests use fakes for
+the browser, Entra and SecureStore, and the web E2E tests run without
+sign-in. They do not prove native sign-in. Who may do what is enforced by
+the API and proven by its integration tests, including the roles that could
+not be tried on the phone (see the API's
+[role and permission matrix](https://github.com/kris7011/meeting-room-booking/blob/main/docs/role-permission-matrix.md)).
+
+## Organisation administration checklist, 26 October 2026
+
+The existing Owner experience, with the one available account (issue #18).
+Steps 1–5 only read data and ran against the real development database.
+Every step that writes ran against an **isolated copy**, so no real
+organisation, room, member or invitation was changed:
+
+1. A verified snapshot of the development database (the backend's
+   `RoomBooking.DatabaseTool backup`, consistent while the API runs) was
+   copied to a temporary folder.
+2. A second API (`scripts/Start-Local.ps1 -Port 5013`) served the copy.
+3. `adb reverse tcp:5003 tcp:5013` sent the phone's `localhost:5003` to it.
+   The app was force-stopped and started again, so no open connection to the
+   real API remained, and the second API's log showed the app's requests
+   before anything was written. (The app's *API:* line still shows
+   `http://localhost:5003`, the address built into the bundle.)
+4. Afterwards `adb reverse tcp:5003 tcp:5003` restored the real API, the
+   second API was stopped, and a new snapshot of the real database had the
+   same per-table row counts and content hashes as before the test. The
+   copies and screen captures were deleted.
+
+| # | Step | Database | Result |
+|---|---|---|---|
+| 1 | *Aktiv organisation* shows Test ApS with *Ejer*, chips for Legacy and Test ApS | real, read only | Passed |
+| 2 | Switch to Legacy: Legacy's three rooms, *(standardorganisation)*, and the Test ApS booking is no longer listed | real, read only | Passed |
+| 3 | Switch back: Test ApS's rooms and booking return | real, read only | Passed |
+| 4 | *Administrer organisation* in Test ApS: details and counts, *Omdøb organisation*, rooms with *Rediger*/*Arkivér*, invitation roles *Medlem*/*Administrator* only (never Owner), open invitations, members with role labels; no e-mail address or ID in the member list | real, read only | Passed |
+| 5 | Android's back button returns to booking | real, read only | Passed |
+| 6 | Cold start against the copy: session restored, Test ApS still active | copy | Passed |
+| 7 | Create a test room | copy | Passed; count 2 → 3 |
+| 8 | Edit its capacity | copy | Passed |
+| 9 | Archive it (with confirmation) | copy | Passed; listed as *Arkiveret*, count 3 → 2 |
+| 10 | Restore it | copy | Passed |
+| 11 | Invite a synthetic `@example.com` address as Member | copy | Passed; the code is shown once, with its expiry (7 days); the open invitation lists address, role and inviter, not the code |
+| 12 | Revoke that invitation (with confirmation) | copy | Passed; *Ingen åbne invitationer* |
+| 13 | Demote the sole Owner to Member | copy | Passed: refused by the API (`last_owner`), message *Organisationen skal have mindst én ejer…*, role unchanged |
+| 14 | *Forlad organisationen* as the sole Owner | copy | Passed: refused, membership unchanged in the database |
+| 15 | Rename Test ApS | copy | Passed; the booking page shows the new name at once |
+| 16 | Legacy's administration page offers no rename | copy, read only | Passed |
+| 17 | *Del invitation* (Android share sheet) | – | Not run: it would hand the code to another app |
+| 18 | Admin view, Member view, accepting an invitation as a new user | – | **Not run**: needs a second account. Covered by the API's integration tests |
+| 19 | Changing another member's role, removing another member | – | **Not run**: Test ApS has no other member. Covered by the API's integration tests |
+
+The database of the copy confirmed steps 7–15: the audit log recorded the
+room creation, update, archive and restore, and the invitation's creation and
+revocation, and no membership change.
+
+**Finding:** the member list offers the sole Owner role chips and
+*Forlad organisationen*, although the API refuses both. The refusal and its
+message are correct; hiding the actions for a sole Owner would be a
+usability improvement, not a security fix.
+
+**Tooling note:** `uiautomator dump` was killed on this phone (low memory);
+`adb exec-out screencap -p` worked.
 
 ### Personal-account rejection, 23 October 2026
 
@@ -76,11 +156,11 @@ registration has `roombookingdev://auth` as its only redirect URI and no
 client secret. Microsoft's `/consumers/` endpoint hands the request on to
 `login.live.com` without an error.
 
-**Still unverified:** the 10:29 identity shows that a personal-account access
-token was validated by the API, and the owner reported a successful Hotmail
-sign-in on the Samsung shortly afterwards. No `logcat` or screenshot of that
-run exists, so it does not count as a checklist result. No record of a Hotmail
-attempt after 23 Oct 07:02 was found. If the message appears again, write down
+**Resolved on 26 October:** in the rebuilt development build, `/common/`
+and the redirect handler were configured and a restored personal-account
+session reached the API (logged), and the owner signed out and signed in
+again interactively (owner report); see
+[Current status](#current-status). If the message appears again, write down
 the date and time, whether the app was **Room Booking** or Expo Go, and the
 `[auth] Microsoft login:` line, then run the
 [preflight](entra-login.md#preflight-check-both-registrations).

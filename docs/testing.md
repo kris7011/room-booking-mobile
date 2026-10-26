@@ -12,7 +12,9 @@ Actions:
 What is **not** automated: React Native components on Android and iOS, the
 real Microsoft sign-in, SecureStore on a device, and signed-in organisation
 flows end to end. Those are manual checks, listed with their current status
-in [device-testing.md](device-testing.md).
+in [device-testing.md](device-testing.md). A passing web or mocked test is
+never counted as proof of native sign-in. Role permissions are enforced by
+the API and tested there, independently of what this app shows.
 
 ## Unit and integration tests (`npm test`)
 

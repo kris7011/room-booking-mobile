@@ -7,10 +7,12 @@ design decision is recorded in
 are in [device-testing.md](device-testing.md).
 
 **Status:** implemented and covered by automated tests with fakes for the
-browser, Entra's token endpoint and SecureStore. A complete sign-in against
-real Microsoft Entra ID on a physical phone **has not been verified yet**
-(see [device-testing.md](device-testing.md#current-status)). iOS has never
-been built.
+browser, Entra's token endpoint and SecureStore. On 26 October 2026 a
+sign-in with a **personal** Microsoft account completed in the Android
+development build on a Samsung, and the session survived restarts; a work or
+school account has not been tried (see
+[device-testing.md](device-testing.md#current-status)). iOS has never been
+built.
 
 ## Where sign-in is available
 

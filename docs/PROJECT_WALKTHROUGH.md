@@ -18,11 +18,9 @@ the backend walkthrough:
 | **[In review]** | Implemented on an open pull request, not yet on `main`. |
 | **[Not implemented]** | Proposed or future work. Nothing in the code does this yet. |
 
-Last reviewed: 2026-10-24, after API switching and the developer walkthrough
-were merged into `main` through PRs #9 and #10 (merge commits `9002823` and
-`482fa16`). The portfolio documentation is being prepared in PR #12. Device
-verification status remains based on recorded tests and the reported Samsung
-sign-in attempt.
+Last reviewed: 2026-10-26 (phase 5A, issue #18): device results from the
+Samsung on 26 October, separated into owner reports and independently logged
+checks in [device-testing.md](device-testing.md#current-status).
 
 **Related documents:** [local development](local-development.md) ·
 [Microsoft Entra sign-in](entra-login.md) · [organisations](organisations.md) ·
@@ -122,8 +120,9 @@ sequenceDiagram
 - **Public client with PKCE.** A mobile app cannot keep a secret, so there is
   none. PKCE binds the authorization code to this app instance: an
   intercepted code is useless without the code verifier. **[Tested]** with a
-  fake token endpoint. A complete sign-in against real Entra in the
-  development build has **not yet been run on a device** (see
+  fake token endpoint. **[Manual]** against real Entra: a personal-account
+  sign-in completed in the Android development build on 26 October 2026; work
+  or school accounts not tried (see
   [section 7](#still-requires-the-physical-android-device)).
 - **Where tokens live.** Only the refresh token is persisted, in SecureStore
   (`WHEN_UNLOCKED_THIS_DEVICE_ONLY` on iOS), split into chunks of at most
@@ -230,7 +229,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24 in CI; the relevant backend changes from PR #13 are now on backend `main` (`E2E_BACKEND_DIR`) |
 | Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` (matching Expo dependencies are on `main` through merged PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
-| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Recorded in pull request descriptions: the development build installed and started, Metro logged `roombookingdev://auth`, and `adb` delivered that deep link to `.MainActivity` (PR #6); `adb reverse` reached a `127.0.0.1`-only server on the PC (PR #7); two Hotmail attempts on 23 October ran in Expo Go (from `logcat`, prompting `b322f98`). Microsoft rejected both as personal accounts because the API registration did not allow personal accounts at the time (diagnosed in issue #16; see [device-testing.md](device-testing.md#personal-account-rejection-23-october-2026)). **No complete sign-in has been verified.** See [device-testing.md](device-testing.md#current-status). |
+| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). Not run: work or school account, a new user's first sign-in, Admin/Member views, token renewal, invitation links, time handling. See [device-testing.md](device-testing.md#current-status). |
 
 **Not covered by automated tests:** React Native components on Android/iOS
 (there are no component tests; components are exercised only through the web
@@ -240,22 +239,23 @@ sign-in).
 
 ### Still requires the physical Android device
 
-These cannot be verified on Windows, by CI or in the web build:
+These cannot be verified on Windows, by CI or in the web build. Done on
+26 October 2026 (see [device-testing.md](device-testing.md#current-status)):
+the rebuilt development build; personal-account sign-in and the redirect
+back to `roombookingdev://auth`; the session restored across restarts and a
+new sign-in after sign-out; signed-in requests to the local API over
+`adb reverse`; organisation switching and the Owner's screens. Still open:
 
-1. Rebuild the development build (`npx expo run:android`), since `e104927`
-   updated native Expo modules (`expo-modules-core`, `expo-dev-launcher`, …)
-   and changed the Android fingerprint from `0eeb969…` to `e671791…`
-   (`@expo/fingerprint`), and confirm it starts and loads from Metro.
-2. Microsoft sign-in in the system browser and the redirect back to
-   `roombookingdev://auth`; registration on first sign-in.
-3. Refresh token persisted in SecureStore across an app restart; sign-out
-   clears it.
-4. `Set-ApiTarget.ps1 -Mode Local` + `adb reverse tcp:5003 tcp:5003`: signed-in
-   requests reach the PC's local API, with a **restored** database, and the
+1. A work or school account, and the first sign-in (registration) of a new
+   account.
+2. SecureStore contents after sign-out, silent token renewal after an hour,
+   offline start, revoked sessions.
+3. A **restored** database behind `Set-ApiTarget.ps1 -Mode Local`: the
    organisations, rooms, bookings and roles look as they did before.
-5. Token transport on the device: a plain-HTTP Wi-Fi address gets no token.
-6. Invitation deep link `roombookingdev://invitation?token=…`.
-7. Organisation switching and Owner/Admin/Member screens with real accounts.
+4. Token transport on the device: a plain-HTTP Wi-Fi address gets no token.
+5. Invitation deep link `roombookingdev://invitation?token=…`.
+6. Admin and Member screens and accepting an invitation, which need a second
+   account (the API side is covered by its integration tests).
 
 ## 8. Local development
 
@@ -272,8 +272,7 @@ These cannot be verified on Windows, by CI or in the web build:
 
 - **Development build:** `npx expo run:android` produces
   `io.github.kris7011.roombooking.dev`. **[Manual]**, built and installed on a
-  Samsung SM-A057G (PR #6). The installed build predates `e104927` and must be
-  rebuilt before the next device test.
+  Samsung SM-A057G (PR #6), and rebuilt after `e104927` on 26 October 2026.
 - **Release/production builds: [Not implemented].** There is no `eas.json`,
   no release package ID, no release redirect URI registration, and no store
   configuration. A release build would send tokens over HTTPS only, so it
