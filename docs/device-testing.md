@@ -108,7 +108,9 @@ revocation, and no membership change.
 **Finding:** the member list offers the sole Owner role chips and
 *Forlad organisationen*, although the API refuses both. The refusal and its
 message are correct; hiding the actions for a sole Owner would be a
-usability improvement, not a security fix.
+usability improvement, not a security fix. Addressed in Phase 5B (issue #20):
+the list now offers the sole Owner neither and explains how to hand over
+ownership; not yet re-checked on the device.
 
 **Tooling note:** `uiautomator dump` was killed on this phone (low memory);
 `adb exec-out screencap -p` worked.

@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { describeRole } from '../../api/current-user';
 import { liveOrganizationsApi } from '../../api/organizations-api';
 import type { LoadState } from '../../models/load-state';
 import type { Member, MembershipRole, Organization } from '../../models/organization';
-import { describeOrganizationError } from '../../organizations/organization-messages';
-import { canChangeRoles, canRemoveMember } from '../../organizations/permissions';
+import { describeOrganizationError, describeSoleOwner } from '../../organizations/organization-messages';
+import { canChangeRoles, isSoleOwner, memberActions } from '../../organizations/permissions';
 import { Chip } from '../Chip';
 import { StatusMessage } from '../StatusMessage';
 import { Card, ConfirmAction, RoleBadge, uiStyles } from '../ui';
@@ -15,7 +15,8 @@ const ROLES: MembershipRole[] = ['Owner', 'Admin', 'Member'];
 
 /**
  * The member list. Owners change roles and remove members; anyone can
- * leave. The last Owner is protected by the API (409 last_owner).
+ * leave. The only Owner is offered neither a new role nor leaving, but told
+ * to hand over ownership first; the API refuses both anyway (409 last_owner).
  */
 export function MembersSection({
   organization,
@@ -34,18 +35,36 @@ export function MembersSection({
   const [message, setMessage] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
   const ownerView = canChangeRoles(organization.role);
 
+  // A response for an organisation the user has since switched away from is
+  // dropped, so one organisation's members are never shown under another.
+  const shownOrganization = useRef(organization.publicId);
+  useEffect(() => {
+    shownOrganization.current = organization.publicId;
+  }, [organization.publicId]);
+
   const load = useCallback(async () => {
+    const organizationId = organization.publicId;
     setMembers((previous) => (previous.status === 'success' ? previous : { status: 'loading' }));
     try {
-      setMembers({ status: 'success', data: await liveOrganizationsApi.listMembers(organization.publicId) });
+      const data = await liveOrganizationsApi.listMembers(organizationId);
+      if (shownOrganization.current === organizationId) setMembers({ status: 'success', data });
     } catch (caught) {
-      setMembers({ status: 'error', message: describeOrganizationError(caught) });
+      if (shownOrganization.current === organizationId) setMembers({ status: 'error', message: describeOrganizationError(caught) });
     }
   }, [organization.publicId]);
 
   useEffect(() => {
+    setMembers({ status: 'loading' });
+    setMessage(null);
     void load();
   }, [load]);
+
+  // A refused change usually means the list is out of date (e.g. changed on
+  // another device): show the error and what the API says now.
+  const refused = async (caught: unknown) => {
+    setMessage({ kind: 'error', text: describeOrganizationError(caught) });
+    await load();
+  };
 
   const changeRole = async (member: Member, role: MembershipRole) => {
     if (role === member.role) return;
@@ -58,7 +77,7 @@ export function MembersSection({
       if (member.isCurrentUser) onOwnRoleChanged();
       else await load();
     } catch (caught) {
-      setMessage({ kind: 'error', text: describeOrganizationError(caught) });
+      await refused(caught);
     } finally {
       setBusyId(null);
     }
@@ -77,7 +96,7 @@ export function MembersSection({
       onChanged();
       await load();
     } catch (caught) {
-      setMessage({ kind: 'error', text: describeOrganizationError(caught) });
+      await refused(caught);
     } finally {
       setBusyId(null);
     }
@@ -100,40 +119,49 @@ export function MembersSection({
       ) : members.status === 'error' ? (
         <StatusMessage variant="error" title="Kunne ikke hente medlemmer" message={members.message} actionLabel="Prøv igen" onAction={() => void load()} />
       ) : (
-        members.data.map((member) => (
-          <View key={member.userPublicId} style={uiStyles.listItem}>
-            <View style={uiStyles.between}>
-              <Text style={[uiStyles.strong, uiStyles.flex]} numberOfLines={1}>
-                {member.displayName}
-                {member.isCurrentUser ? <Text style={uiStyles.caption}> (dig)</Text> : null}
-              </Text>
-              <RoleBadge role={member.role} />
-            </View>
-
-            {ownerView ? (
-              <View style={uiStyles.row}>
-                {ROLES.map((role) => (
-                  <Chip
-                    key={role}
-                    label={describeRole(role)}
-                    selected={member.role === role}
-                    onPress={() => void changeRole(member, role)}
-                    accessibilityLabel={`Gør ${member.displayName} til ${describeRole(role).toLowerCase()}`}
-                  />
-                ))}
+        members.data.map((member) => {
+          const actions = memberActions(organization.role, member, members);
+          return (
+            <View key={member.userPublicId} style={uiStyles.listItem}>
+              <View style={uiStyles.between}>
+                <Text style={[uiStyles.strong, uiStyles.flex]} numberOfLines={1}>
+                  {member.displayName}
+                  {member.isCurrentUser ? <Text style={uiStyles.caption}> (dig)</Text> : null}
+                </Text>
+                <RoleBadge role={member.role} />
               </View>
-            ) : null}
 
-            {canRemoveMember(organization.role, member.isCurrentUser) ? (
-              <ConfirmAction
-                label={member.isCurrentUser ? 'Forlad organisationen' : 'Fjern fra organisationen'}
-                confirmLabel={member.isCurrentUser ? 'Bekræft: forlad' : 'Bekræft fjernelse'}
-                busy={busyId === member.userPublicId}
-                onConfirm={() => void remove(member)}
-              />
-            ) : null}
-          </View>
-        ))
+              {member.isCurrentUser && isSoleOwner(members) ? (
+                <Text style={uiStyles.caption} accessibilityRole="text" testID="sole-owner-notice">
+                  {describeSoleOwner(members.data.length)}
+                </Text>
+              ) : null}
+
+              {actions.canChangeRole ? (
+                <View style={uiStyles.row}>
+                  {ROLES.map((role) => (
+                    <Chip
+                      key={role}
+                      label={describeRole(role)}
+                      selected={member.role === role}
+                      onPress={() => void changeRole(member, role)}
+                      accessibilityLabel={`Gør ${member.displayName} til ${describeRole(role).toLowerCase()}`}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {actions.canRemove ? (
+                <ConfirmAction
+                  label={member.isCurrentUser ? 'Forlad organisationen' : 'Fjern fra organisationen'}
+                  confirmLabel={member.isCurrentUser ? 'Bekræft: forlad' : 'Bekræft fjernelse'}
+                  busy={busyId === member.userPublicId}
+                  onConfirm={() => void remove(member)}
+                />
+              ) : null}
+            </View>
+          );
+        })
       )}
     </Card>
   );

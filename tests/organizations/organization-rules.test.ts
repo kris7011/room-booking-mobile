@@ -5,8 +5,18 @@ import { describe, test } from 'node:test';
 
 import { ApiError } from '../../src/api/http-client';
 import { invitationLink, invitationTokenFromUrl, parseInvitationInput } from '../../src/organizations/invitation-link';
-import { describeOrganizationError } from '../../src/organizations/organization-messages';
-import { canAdminister, canChangeRoles, canRemoveMember, canRename, invitableRoles } from '../../src/organizations/permissions';
+import type { LoadState } from '../../src/models/load-state';
+import type { Member, MembershipRole } from '../../src/models/organization';
+import { describeOrganizationError, describeSoleOwner } from '../../src/organizations/organization-messages';
+import {
+  canAdminister,
+  canChangeRoles,
+  canRemoveMember,
+  canRename,
+  invitableRoles,
+  isSoleOwner,
+  memberActions,
+} from '../../src/organizations/permissions';
 import { readRoomDraft } from '../../src/organizations/room-form';
 import { newRandomId } from '../../src/utils/random-id';
 
@@ -42,6 +52,88 @@ describe('what each role is offered', () => {
     assert.equal(canRename('Owner', false), true);
     assert.equal(canRename('Owner', true), false);
     assert.equal(canRename('Admin', false), false);
+  });
+});
+
+function member(name: string, role: MembershipRole, isCurrentUser = false): Member {
+  return { userPublicId: `id-${name}`, displayName: name, role, joinedUtc: '2026-10-01T00:00:00Z', isCurrentUser };
+}
+
+function loaded(...members: Member[]): LoadState<Member[]> {
+  return { status: 'success', data: members };
+}
+
+const NONE = { canChangeRole: false, canRemove: false };
+const ALL = { canChangeRole: true, canRemove: true };
+
+describe('the member list and the last Owner', () => {
+  test('the only Owner is offered neither a new role nor leaving, but still manages everyone else', () => {
+    const me = member('Olivia', 'Owner', true);
+    const admin = member('Adam', 'Admin');
+    const list = loaded(me, admin, member('Mia', 'Member'));
+
+    assert.equal(isSoleOwner(list), true);
+    assert.deepEqual(memberActions('Owner', me, list), NONE);
+    assert.deepEqual(memberActions('Owner', admin, list), ALL);
+  });
+
+  test('the only Owner who is also the only member is told to invite someone first', () => {
+    const list = loaded(member('Olivia', 'Owner', true));
+
+    assert.equal(isSoleOwner(list), true);
+    assert.match(describeSoleOwner(1), /eneste medlem/);
+    assert.match(describeSoleOwner(1), /Inviter/);
+  });
+
+  test('the explanation says how to hand over ownership', () => {
+    assert.match(describeSoleOwner(3), /eneste ejer/);
+    assert.match(describeSoleOwner(3), /Gør først et andet medlem til ejer/);
+  });
+
+  test('with several Owners each may change their own role and leave', () => {
+    const me = member('Olivia', 'Owner', true);
+    const other = member('Oscar', 'Owner');
+    const list = loaded(me, other);
+
+    assert.equal(isSoleOwner(list), false);
+    assert.deepEqual(memberActions('Owner', me, list), ALL);
+    assert.deepEqual(memberActions('Owner', other, list), ALL);
+  });
+
+  test('an Admin changes no roles, may leave, and is never the last Owner', () => {
+    const me = member('Adam', 'Admin', true);
+    const owner = member('Olivia', 'Owner');
+    const list = loaded(owner, me, member('Mia', 'Member'));
+
+    assert.equal(isSoleOwner(list), false);
+    assert.deepEqual(memberActions('Admin', me, list), { canChangeRole: false, canRemove: true });
+    assert.deepEqual(memberActions('Admin', owner, list), NONE);
+  });
+
+  test('a Member is offered only leaving', () => {
+    const me = member('Mia', 'Member', true);
+    const list = loaded(member('Olivia', 'Owner'), me);
+
+    assert.deepEqual(memberActions('Member', me, list), { canChangeRole: false, canRemove: true });
+  });
+
+  test('nothing is offered while the list is loading or after it failed', () => {
+    const me = member('Olivia', 'Owner', true);
+    const notLoaded: LoadState<Member[]>[] = [{ status: 'idle' }, { status: 'loading' }, { status: 'error', message: 'Netværksfejl' }];
+
+    for (const list of notLoaded) {
+      assert.equal(isSoleOwner(list), false);
+      assert.deepEqual(memberActions('Owner', me, list), NONE);
+    }
+  });
+
+  test('a list that is out of date only changes what is shown; the API answer is still explained', () => {
+    // The list says there is another Owner, who has since left on another
+    // device: the app offers leaving, and the API's refusal is explained.
+    const me = member('Olivia', 'Owner', true);
+    assert.deepEqual(memberActions('Owner', me, loaded(me, member('Oscar', 'Owner'))), ALL);
+    const refused = new ApiError('http', 'x', 409, { status: 409, code: 'last_owner' });
+    assert.match(describeOrganizationError(refused), /mindst én ejer/);
   });
 });
 

@@ -36,6 +36,18 @@ export function describeOrganizationError(error: unknown): string {
   return describeError(error);
 }
 
+/**
+ * Why the only Owner is offered neither a new role nor leaving, and how to
+ * hand over ownership first. `memberCount` includes the Owner.
+ */
+export function describeSoleOwner(memberCount: number): string {
+  return memberCount > 1
+    ? 'Du er den eneste ejer, så du kan ikke ændre din egen rolle eller forlade organisationen. ' +
+        'Gør først et andet medlem til ejer ved at vælge »Ejer« ud for vedkommende.'
+    : 'Du er den eneste ejer og det eneste medlem. Inviter en anden og gør vedkommende til ejer, ' +
+        'før du kan ændre din egen rolle eller forlade organisationen.';
+}
+
 /** The API's problem code, if the error has one. */
 export function problemCode(error: unknown): string | undefined {
   return error instanceof ApiError ? error.problem?.code : undefined;

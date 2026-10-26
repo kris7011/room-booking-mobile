@@ -43,7 +43,7 @@ Covered:
 - **Token transport against `http://localhost`** (`http-client-transport.test.ts`, the `adb reverse` setup): a development bundle sends the token; a release bundle, or one whose `__DEV__` is unknown, sends none and does not even ask for it, and the request still works.
 - **Sign-in availability** (`auth-availability.test.ts`): web, Expo Go (by its `exp://` redirect URI, and by `isRunningInExpoGo()` even when the redirect URI looks like the development build's), missing and invalid settings; the development log line names the authorize endpoint and which accounts it accepts, never the client ID.
 - **Authorization request** (`authorize-request.test.ts`): `/common` endpoint by default, client ID, redirect URI, scopes, PKCE always on, no `domain_hint`/`login_hint`; `organizations` changes the endpoint.
-- **Organisations** (`tests/organizations/`, `organizations-api.test.ts`): organisation choice and switching, late responses dropped, permissions per role, invitation links, the room form and organisation endpoints.
+- **Organisations** (`tests/organizations/`, `organizations-api.test.ts`): organisation choice and switching, late responses dropped, permissions per role, what the member list offers the only Owner, several Owners, Admins and Members (and nothing before it has loaded), invitation links, the room form and organisation endpoints.
 
 Not covered yet: React components in isolation (this would need `jest-expo` and React Native Testing Library). The end-to-end tests cover them in the browser.
 
