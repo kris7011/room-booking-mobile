@@ -184,6 +184,7 @@ which links each point to its code and tests:
 | Check | Command | Runs in CI |
 |---|---|---|
 | Type checking (app, tests, E2E) | `npm run typecheck` | `ci.yml` |
+| ESLint (`eslint-config-expo`, fails on any warning) | `npm run lint` | `ci.yml` |
 | Unit and integration tests | `npm test` | `ci.yml` |
 | Dependency versions against Expo SDK 58 | `npx expo-doctor` | `ci.yml` |
 | API target script smoke test | – | `ci.yml` (PowerShell 7) |

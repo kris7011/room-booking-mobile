@@ -15,6 +15,7 @@ function loadEnv(value: string | undefined): EnvModule {
     process.env.EXPO_PUBLIC_API_URL = value;
   }
   delete require.cache[envModulePath];
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- a fresh module instance per value; import() is cached
   return require(envModulePath) as EnvModule;
 }
 

@@ -50,6 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void controller.activate(registeredUser.publicId, fromMe);
     // Only a different user starts over; the same user's identity object
     // changing (a recheck) refreshes inside activate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the user's ID on purpose (see above)
   }, [controller, registeredId]);
 
   return (

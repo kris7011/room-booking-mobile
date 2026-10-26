@@ -84,8 +84,9 @@ components are thin wrappers (`AuthProvider`, `SessionProvider`).
 | expo-dev-client | The Android development build used on the physical device |
 | react-native-web | The browser build, used by the E2E tests |
 | `node:test` | Unit and integration tests of the logic (`npm test`) |
+| ESLint 9 + `eslint-config-expo` 58 | Static checks (`npm run lint`, flat config in `eslint.config.js`) |
 | Playwright | End-to-end tests of the web build against the real API |
-| GitHub Actions | Typecheck, tests, Expo Doctor, E2E |
+| GitHub Actions | Typecheck, lint, tests, Expo Doctor, E2E |
 
 ## 4. Sign-in
 
@@ -236,6 +237,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | --- | --- | --- |
 | Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, date/time and search logic, plus Git ignore-behaviour tests | 349 tests passed on 2026-10-24 (PR #12) |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-24 |
+| Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-26 (Phase 5B); a deliberate unused variable made it exit 1 |
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24 in CI; the relevant backend changes from PR #13 are now on backend `main` (`E2E_BACKEND_DIR`) |
 | Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` (matching Expo dependencies are on `main` through merged PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
@@ -308,8 +310,15 @@ new sign-in after sign-out; signed-in requests to the local API over
   `main` by the now-merged PR #11). This is
   intended: it is the signal to update. The installed development build is
   older than that bump until it is rebuilt.
-- **No component tests and no ESLint configuration.** `npx expo lint` would
-  first scaffold ESLint. Both are candidates for a separate PR.
+- **No component tests.** The logic behind components is tested in `npm test`;
+  rendering is checked by the web E2E tests only.
+- **Lint baseline.** `react-hooks/set-state-in-effect` is switched off for the
+  ten existing files (components and one hook) that set state synchronously in an effect
+  (listed in `eslint.config.js`); all other and all new files are checked.
+  Refactoring those components is a follow-up.
+- **The lint check cannot be made "required" on GitHub.** Branch protection
+  needs GitHub Pro for a private repository, so a failing check shows red but
+  does not technically prevent a merge.
 - **`npm audit` reports 5 high-severity findings** from 2 advisories
   (`node-forge` and `zod` under `@expo/cli`). They are in the Expo CLI
   tooling, not the app bundle, and were present before PR #9;

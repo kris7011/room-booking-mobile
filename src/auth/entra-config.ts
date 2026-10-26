@@ -1,4 +1,4 @@
-﻿// Microsoft Entra ID settings for the mobile app, a public client: it signs
+// Microsoft Entra ID settings for the mobile app, a public client: it signs
 // in with the authorization code flow and PKCE and never has a client
 // secret. Everything here ends up in the app bundle and may be seen by
 // anyone, which is fine for these values: a client ID, an API scope and a
