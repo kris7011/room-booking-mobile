@@ -9,27 +9,33 @@ Building and installing the development build is described in
 
 ## Current status
 
-All device checks ran on one **Samsung SM-A057G** (Android) with the
-**development build** (`io.github.kris7011.roombooking.dev`, not Expo Go),
-signed in with the owner's **personal Microsoft account**, against the local
-API over USB (`adb reverse`, see [below](#sign-in-against-a-local-api-over-usb)).
-Only one Microsoft account was available.
+The successful checks of 26 October 2026 ran on one **Samsung SM-A057G**
+(Android) with the **development build**
+(`io.github.kris7011.roombooking.dev`, not Expo Go), signed in with the
+owner's **personal Microsoft account**, against the local API over USB
+(`adb reverse`, see [below](#sign-in-against-a-local-api-over-usb)). Only one
+Microsoft account was available. The earlier, unsuccessful sign-in attempts
+of 23 October ran in **Expo Go**; their timeline is kept separately under
+[Personal-account rejection](#personal-account-rejection-23-october-2026).
 
 Each result says where it comes from:
 
 - **Owner report**: the owner did the step by hand and reported the outcome
-  (issue #16, 26 October 2026). Nothing independent was recorded.
-- **Logged**: observed over `adb` while the step ran (`logcat`, screen
-  captures, the API's log or database). The captures show personal data and
-  were not kept.
+  (issue #16, 26 October 2026). Nothing independent was recorded for that
+  step.
+- **Logged**: an independent technical observation recorded over `adb`
+  (`logcat`, screen captures, the API's log or database). It covers only
+  what the record shows, not a manual step done outside it. The captures show
+  personal data and were not kept.
 - **PR #n**: recorded in that pull request's description.
 
 | Check | Result | Evidence |
 |---|---|---|
 | Development build built (`expo run:android`), installed and started | Passed, 22 October; rebuilt after `e104927` and installed again, 26 October | PR #6; logged |
 | Metro logs `[auth] Redirect URI: roombookingdev://auth`; `adb` delivers that link to `.MainActivity` | Passed | PR #6 |
-| Microsoft sign-in with a personal account: authority `/common/`, the browser returns to the development build via `roombookingdev://auth` | **Passed**, 26 October | logged (`logcat`); owner report |
-| The app shows the personal account and *Registreret i Room Booking som …* | **Passed**, 26 October | logged |
+| Sign-in configuration in the running development build: package `io.github.kris7011.roombooking.dev`, authority `/common/`, `roombookingdev://auth` registered as the redirect handler | **Passed**, 26 October | logged (`logcat`) |
+| A new interactive Microsoft sign-in with the personal account on `/common/`: the browser returns to the development build via `roombookingdev://auth` | **Passed**, 26 October | owner report. No `logcat` of this sign-in was captured |
+| The app shows the personal account and *Registreret i Room Booking som …* (restored authenticated state) | **Passed**, 26 October | logged |
 | Session restored after the app is closed completely (`am force-stop`, and reopened from the launcher), same user, no new browser sign-in | **Passed**, 26 October | logged (several cold starts); owner report |
 | **Log ud**, then a new interactive sign-in with the same account | **Passed**, 26 October | owner report |
 | Existing memberships (Legacy and Test ApS, role *Ejer*) shown after sign-in | **Passed**, 26 October | owner report; logged |
@@ -150,9 +156,10 @@ registration has `roombookingdev://auth` as its only redirect URI and no
 client secret. Microsoft's `/consumers/` endpoint hands the request on to
 `login.live.com` without an error.
 
-**Resolved on 26 October:** in the rebuilt development build, a
-personal-account sign-in on `/common/` completed and returned to the app
-(logged), and the owner signed out and in again (owner report); see
+**Resolved on 26 October:** in the rebuilt development build, `/common/`
+and the redirect handler were configured and a restored personal-account
+session reached the API (logged), and the owner signed out and signed in
+again interactively (owner report); see
 [Current status](#current-status). If the message appears again, write down
 the date and time, whether the app was **Room Booking** or Expo Go, and the
 `[auth] Microsoft login:` line, then run the
