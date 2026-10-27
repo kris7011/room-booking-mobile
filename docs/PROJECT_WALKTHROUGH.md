@@ -155,7 +155,14 @@ Code: [`http-client.ts`](../src/api/http-client.ts).
 - On `401` it renews the token once and retries once, still bound to the
   original session.
 - Problem Details from the API are parsed, and `error-messages.ts` maps them
-  to Danish messages using the API's stable `code` values.
+  to Danish messages using the API's stable `code` values. That includes the
+  codes for lost access (`organization_not_found`,
+  `organization_permission_denied`, `user_disabled`, `user_not_registered`)
+  and for bookings, because a member can be removed, demoted or disabled on
+  another device while searching or booking. The API's English `detail` is
+  only shown for codes the app does not know. Codes that only the
+  administration screens meet are in `organizations/organization-messages.ts`,
+  which falls back to `error-messages.ts`.
 
 ### Where a token may be sent [Tested]
 
