@@ -259,6 +259,32 @@ describe('signIn', () => {
     await first;
   });
 
+  // The account panel only offers sign-in when signed out, but the
+  // controller must not depend on that: a second login that is cancelled or
+  // fails would otherwise show "signed out" while the old session still
+  // handed out tokens and stayed stored for the next app start.
+  test('while signed in, signIn does nothing: the session and what the app shows never disagree', async () => {
+    const secondLogins: AuthControllerDeps['authorize'][] = [
+      async () => ({ type: 'cancel' }),
+      async () => Promise.reject(oauthError('access_denied', 'AADSTS65004: declined')),
+    ];
+    for (const secondLogin of secondLogins) {
+      let logins = 0;
+      const fake = await signedIn(
+        setup({
+          authorize: async () => (++logins === 1 ? { type: 'success', code: 'code-from-entra', codeVerifier: 'verifier-1' } : secondLogin()),
+        }),
+      );
+
+      await fake.controller.signIn();
+
+      assert.equal(fake.authorize.mock.callCount(), 1, 'no second browser login while signed in');
+      assert.equal(fake.controller.getState().status, 'signed-in');
+      assert.equal(await fake.controller.getAccessToken(), 'fake-access-1');
+      assert.equal((await loadSession(fake.store))?.refreshToken, 'fake-refresh-1');
+    }
+  });
+
   test('no refresh token (offline_access refused) → signed in for now, with a warning', async () => {
     const fake = await signedIn(setup({ redeemCode: async () => tokens(1, { refreshToken: undefined }) }));
     const state = fake.controller.getState();
@@ -326,6 +352,21 @@ describe('getAccessToken', () => {
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(fake.store.values.size, 0);
     // Signed out now: later requests go without a token instead of failing.
+    assert.equal(await fake.controller.getAccessToken(), null);
+  });
+
+  test('access refused at renewal (e.g. blocked by Conditional Access) → signed out, the stored session deleted', async () => {
+    const fake = await signedIn(
+      setup({ refresh: async () => Promise.reject(oauthError('invalid_grant', 'AADSTS53003: Access has been blocked by Conditional Access policies.')) }),
+    );
+    clock.now += HOUR;
+
+    await assert.rejects(fake.controller.getAccessToken(), (error: unknown) => error instanceof AuthFlowError && error.kind === 'access-denied');
+    const state = fake.controller.getState();
+    assert.equal(state.status, 'signed-out');
+    assert.match(state.status === 'signed-out' ? (state.notice?.message ?? '') : '', /afviste login.*AADSTS53003/);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(fake.store.values.size, 0);
     assert.equal(await fake.controller.getAccessToken(), null);
   });
 

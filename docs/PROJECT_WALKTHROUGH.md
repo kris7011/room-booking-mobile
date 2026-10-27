@@ -140,6 +140,11 @@ sequenceDiagram
   `generation` counter. A grant remembers its generation (`isCurrent()`), and
   `http-client.ts` checks it right before `fetch`. A request that started as
   user A is never sent as user B or anonymously after a sign-out. **[Tested]**
+- **One session at a time.** `signIn()` does nothing while a login is open
+  or someone is signed in; switching accounts means `signOut()` first. The
+  account panel only offers sign-in when signed out, but the controller does
+  not rely on that: a cancelled second login could otherwise show "signed
+  out" while the first session still had tokens. **[Tested]**
 - **Availability.** Sign-in is off on web and in Expo Go, because the
   redirect `roombookingdev://auth` only reaches the development build
   (`auth-availability.ts`).
