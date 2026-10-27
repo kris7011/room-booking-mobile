@@ -222,7 +222,23 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 
 - `OrganizationController` loads the user's organisations, restores the last
   choice per user from SecureStore, and drops responses that arrive after a
-  newer one or after the user signed out. **[Tested]**
+  newer one, after the user signed out, or after the user created or left an
+  organisation. **[Tested]**
+- **Access synchronisation [Tested, In review]** ([ADR 0004](adr/0004-organization-access-sync.md)).
+  `sync(reason)` reloads the list when the app returns to the foreground
+  (skipped while the list is younger than 30 s), when the user switches
+  organisation, when any API answer says the access changed
+  (`organization_not_found`, `organization_permission_denied`, `user_disabled`,
+  `user_not_registered`; reported by `setAccessChangedListener` in
+  `http-client.ts`), and on "Prøv igen". A sync joins one already running; no
+  timer polls. A lost active organisation falls back to another (or to
+  onboarding) with a Danish notice; a changed role is applied with a notice,
+  and the administration page and the upcoming bookings load again for it
+  (keyed by role) while the search and draft stay. A disabled or unregistered
+  account clears the list. Offline or a server error keeps the list but says it
+  may be out of date ("Serveren afgør stadig, hvad du må"). The local role is
+  never an authority: the API checks every request. The `AppState` and
+  listener wiring in `SessionProvider` is not covered by an automated test.
 - `HomeScreen` renders `BookingArea` with `key={active.publicId}`. Changing
   the key makes React discard the component and its state, so switching
   organisations always starts with an empty search, form and list.
@@ -247,7 +263,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 
 | Layer | What | Status |
 | --- | --- | --- |
-| Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, date/time and search logic, plus Git ignore-behaviour tests | 349 tests passed on 2026-10-24 (PR #12) |
+| Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors, access-changed signal), API clients against a mocked `fetch` that copies the backend contract, organisation controller (incl. access synchronisation) and rules, date/time and search logic, plus Git ignore-behaviour tests | 397 tests passed on 2026-10-27 (Phase 5D PR C; 365 on `main` `7db55b7` before it) |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-24 |
 | Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-26 (Phase 5B); a deliberate unused variable made it exit 1 |
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24 in CI; the relevant backend changes from PR #13 are now on backend `main` (`E2E_BACKEND_DIR`) |
@@ -310,6 +326,7 @@ new sign-in after sign-out; signed-in requests to the local API over
 | Token transport rule in the app; API chosen at bundle time | Security does not depend on configuration discipline | Switching servers needs a Metro restart or a new build | [ADR 0002](adr/0002-api-target-and-token-transport.md) |
 | Logic in framework-free modules with injected dependencies | Fast, deterministic tests without a device | More wiring code | – |
 | React `key` per organisation | Impossible to show the previous organisation's state | Re-mounts the booking area on every switch | – |
+| Organisation access synchronised at lifecycle moments, no polling | Stale roles corrected when the user looks or acts, with little battery or data | An idle foreground app does not notice a change until the next request | [ADR 0004](adr/0004-organization-access-sync.md) |
 | Plain state instead of Expo Router | Two screens do not need a router | Would need migration if navigation grows | – |
 
 ## 11. Known limitations
@@ -345,6 +362,11 @@ new sign-in after sign-out; signed-in requests to the local API over
 - **Sign-in needs the internet** (Microsoft Entra), also when the API runs
   locally.
 - **No offline mode**: bookings are not cached or queued.
+- **Access changes made elsewhere are noticed at lifecycle moments only**
+  (foreground after 30 s, switch, a refused request, "Prøv igen"), not while
+  the app sits idle in the foreground. Network return is not detected
+  directly. Organisation selection keys stay in SecureStore after sign-out
+  (they hold no secret; unchanged).
 
 ## 12. How this project was built
 
