@@ -1,8 +1,11 @@
 // Danish texts for the organisation features: role names and what the
 // API's problem codes mean for the user. Codes that searching and booking
 // can meet too (lost access, bookings) are described by describeError.
+import { describeRole } from '../api/current-user';
 import { describeError } from '../api/error-messages';
 import { ApiError } from '../api/http-client';
+import type { Organization } from '../models/organization';
+import type { OrganizationNotice } from './organization-controller';
 
 const MESSAGES: Readonly<Record<string, string>> = {
   idempotency_key_reused: 'Oprettelsen kunne ikke gentages sikkert. Prøv igen.',
@@ -46,4 +49,23 @@ export function describeSoleOwner(memberCount: number): string {
 /** The API's problem code, if the error has one. */
 export function problemCode(error: unknown): string | undefined {
   return error instanceof ApiError ? error.problem?.code : undefined;
+}
+
+/** Danish text for what the last synchronisation found. */
+export function describeOrganizationNotice(
+  notice: OrganizationNotice,
+  active: Organization | null,
+): { title: string; message: string } {
+  if (notice.kind === 'role-changed') {
+    return {
+      title: `Din rolle i ${notice.organizationName} er ændret`,
+      message: `Du er nu ${describeRole(notice.role).toLowerCase()}. Appen viser kun det, din nye rolle giver adgang til.`,
+    };
+  }
+  return {
+    title: `Du har ikke længere adgang til ${notice.organizationName}`,
+    message: active
+      ? `Du er fjernet fra organisationen, eller den er slettet. Appen viser nu ${active.name}.`
+      : 'Du er fjernet fra organisationen, eller den er slettet. Opret en organisation, eller accepter en invitation for at fortsætte.',
+  };
 }

@@ -26,7 +26,9 @@ export function AppScreens() {
   }, [adminFor, showAdmin]);
 
   if (showAdmin) {
-    return <OrganizationAdminScreen key={active.publicId} organization={active} onBack={closeAdmin} />;
+    // Keyed by the role too: a new role (e.g. Owner → Admin) loads every
+    // section again with what that role may see and do.
+    return <OrganizationAdminScreen key={`${active.publicId}:${active.role}`} organization={active} onBack={closeAdmin} />;
   }
 
   return <HomeScreen onOpenAdmin={() => setAdminFor(active?.publicId ?? null)} />;

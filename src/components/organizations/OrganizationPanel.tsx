@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { describeOrganizationAccess } from '../../api/current-user';
 import type { Organization } from '../../models/organization';
+import { describeOrganizationNotice } from '../../organizations/organization-messages';
 import { canAdminister } from '../../organizations/permissions';
 import { useSession } from '../../organizations/SessionProvider';
 import { colors, spacing, typography } from '../../theme/theme';
@@ -67,12 +68,39 @@ export function OrganizationPanel({ onOpenAdmin }: { onOpenAdmin: () => void }) 
     </>
   );
 
-  const { active, organizations: all } = organizations;
+  const { active, organizations: all, notice: syncNotice, syncError } = organizations;
+  const described = syncNotice ? describeOrganizationNotice(syncNotice, active) : null;
+
+  const syncMessages = (
+    <>
+      {described ? (
+        <StatusMessage
+          variant="warning"
+          title={described.title}
+          message={described.message}
+          actionLabel="OK"
+          onAction={() => controller.dismissNotice()}
+        />
+      ) : null}
+      {syncError ? (
+        <StatusMessage
+          variant="warning"
+          title="Kunne ikke opdatere dine organisationer"
+          message={`${syncError} Du ser de organisationer og roller, appen sidst hentede. Serveren afgør stadig, hvad du må.`}
+          actionLabel="Prøv igen"
+          onAction={() => void controller.sync('manual')}
+        />
+      ) : null}
+    </>
+  );
 
   if (active === null) {
+    // Onboarding: the list is empty. A list the app could not update is not
+    // known to be empty, so it shows the sync problem too.
     const access = describeOrganizationAccess(identity.user);
     return (
       <Card title="Kom i gang med en organisation" testID="organization-onboarding">
+        {syncMessages}
         <Text style={uiStyles.body}>{access.detail}</Text>
         <View style={styles.choices}>
           <View style={uiStyles.flex}>
@@ -89,6 +117,7 @@ export function OrganizationPanel({ onOpenAdmin }: { onOpenAdmin: () => void }) 
 
   return (
     <Card testID="organization-panel">
+      {syncMessages}
       <Text style={styles.label}>Aktiv organisation</Text>
       <View style={uiStyles.between}>
         <Text style={[styles.name, uiStyles.flex]} numberOfLines={2}>
