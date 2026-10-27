@@ -59,6 +59,9 @@ const PROBLEM_MESSAGES: Readonly<Record<string, string>> = {
   organization_permission_denied: 'Din rolle i organisationen giver ikke adgang til dette.',
   user_not_registered: 'Du er ikke registreret i Room Booking endnu. Log ud og ind igen.',
   user_disabled: 'Din Room Booking-konto er deaktiveret.',
+  // A repeated booking whose Idempotency-Key the API already knows (backend ADR 0005).
+  created_booking_deleted: 'Bookingen blev oprettet, men er siden blevet slettet. Book igen, hvis du stadig har brug for lokalet.',
+  idempotency_key_reused: 'Bookingen er allerede sendt med andre oplysninger. Start en ny booking.',
 };
 
 function describeHttpError(error: ApiError): string {

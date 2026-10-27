@@ -113,6 +113,11 @@ interface RequestOptions {
   headers?: Record<string, string>;
 }
 
+/** The Idempotency-Key header for a repeatable POST, or none without a key. */
+export function idempotencyHeaders(idempotencyKey: string | undefined): Record<string, string> | undefined {
+  return idempotencyKey === undefined ? undefined : { 'Idempotency-Key': idempotencyKey };
+}
+
 export function buildUrl(path: string, query?: Record<string, QueryValue>): string {
   if (!apiBaseUrl) {
     throw new ApiError('not-configured', 'EXPO_PUBLIC_API_URL is not set.');
