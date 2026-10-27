@@ -1,13 +1,10 @@
 // Danish texts for the organisation features: role names and what the
-// API's problem codes mean for the user.
+// API's problem codes mean for the user. Codes that searching and booking
+// can meet too (lost access, bookings) are described by describeError.
 import { describeError } from '../api/error-messages';
 import { ApiError } from '../api/http-client';
 
-const MESSAGES: Record<string, string> = {
-  organization_not_found: 'Organisationen findes ikke, eller du er ikke medlem af den længere.',
-  organization_permission_denied: 'Din rolle i organisationen giver ikke adgang til dette.',
-  user_not_registered: 'Du er ikke registreret i Room Booking endnu. Log ud og ind igen.',
-  user_disabled: 'Din Room Booking-konto er deaktiveret.',
+const MESSAGES: Readonly<Record<string, string>> = {
   idempotency_key_reused: 'Oprettelsen kunne ikke gentages sikkert. Prøv igen.',
   organization_creation_limit: 'Du har oprettet mange organisationer på kort tid. Prøv igen i morgen.',
   legacy_organization_read_only: 'Standardorganisationens navn kan ikke ændres.',
@@ -15,8 +12,6 @@ const MESSAGES: Record<string, string> = {
   room_archived: 'Lokalet er arkiveret. Gendan det, før du ændrer det.',
   room_has_upcoming_bookings: 'Lokalet har kommende bookinger. Flyt eller slet dem, før lokalet arkiveres.',
   meeting_room_not_found: 'Mødelokalet findes ikke i denne organisation.',
-  booking_not_found: 'Bookingen findes ikke længere.',
-  booking_permission_denied: 'Du kan kun ændre og slette dine egne bookinger.',
   member_not_found: 'Personen er ikke medlem af organisationen længere.',
   last_owner: 'Organisationen skal have mindst én ejer. Gør en anden til ejer først.',
   invitation_not_found: 'Invitationen findes ikke. Tjek at hele koden eller linket er kopieret.',
