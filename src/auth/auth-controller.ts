@@ -122,9 +122,15 @@ export class AuthController implements AccessTokenProvider {
     await this.getAccessToken().catch(() => undefined);
   }
 
+  /**
+   * Opens the Microsoft login. Does nothing while a login is open or someone
+   * is signed in: another account signs in after signOut(). Otherwise a
+   * cancelled or failed second login would show "signed out" while the
+   * first session still handed out tokens and stayed stored.
+   */
   async signIn(): Promise<void> {
     const deps = this.deps;
-    if (!deps || this.state.status === 'signing-in') return;
+    if (!deps || this.state.status === 'signing-in' || this.state.status === 'signed-in') return;
     const generation = ++this.generation;
     this.setState({ status: 'signing-in' });
 
