@@ -236,6 +236,85 @@ the date and time, whether the app was **Room Booking** or Expo Go, and the
 `[auth] Microsoft login:` line, then run the
 [preflight](entra-login.md#preflight-check-both-registrations).
 
+## Phase 5D: manual checks for the owner
+
+Written in Phase 5D (27 October 2026) for safe booking retries (mobile
+PR #26, backend PR #18) and organisation access synchronisation (this PR).
+The Phase 5C checks S1–S6 [above](#phase-5c-manual-checks-for-the-owner)
+are separate and still open. Every result below is **Not run** until it has
+been done and recorded with its evidence label (*Owner report* or *Logged*).
+Nothing here needs a second Microsoft account.
+
+**Automated already** (no device needed): the backend idempotency rules
+(`BookingIdempotencyTests`, 28 cases, incl. an answer lost after `COMMIT` and
+an API restart), the app's retry rules and synchronisation rules (`npm test`),
+and in the web build a booking whose answer is dropped after the real API
+saved it (`e2e/specs/booking-retry.spec.ts`). **Only the device can show**
+the Android network stack, `AppState` on Android, and how the texts look.
+
+### Before you start
+
+1. **Merged code.** Backend `main` with PR #18, mobile `main` with PRs #26 and
+   this one. JavaScript only: no development-build rebuild is needed
+   (`expo-crypto` is already in the build; no native change).
+2. **An isolated database copy, never the real file.** PR #18 adds a
+   migration, and D4–D7 change rows by hand. Make a verified copy with the
+   backend's DatabaseTool (backup, then restore to a **new** file; see the
+   backend's `docs/local-portability.md`), start the API on it with
+   `scripts/Start-Local.ps1 -DatabaseFile <copy> -Port 5013`, and point the
+   phone at it with `adb reverse tcp:5003 tcp:5013`. Afterwards set
+   `adb reverse tcp:5003 tcp:5003` again and stop only the 5013 API.
+3. Force-stop and reopen the app so it loads the new bundle.
+4. Keep screenshots and logs to yourself.
+
+### Phase 5D: booking retries (PR #26)
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| D1 | Search, open a room, type a title. Turn on flight mode, tap *Bekræft booking* | The warning *Vi ved ikke, om bookingen blev oprettet* with *Prøv igen*; title and name still filled in; **not** *Bookingen blev ikke oprettet* | Not run |
+| D2 | Turn flight mode off, tap *Prøv igen* | *Booking oprettet*; *Kommende bookinger* lists it **once** | Not run |
+| D3 | Repeat D1, then close the form (*Annuller*) and search again | The warning stays above the results with the booking's title and time; *Prøv igen* there gives *Booking oprettet* once | Not run |
+
+An answer lost *after* the server saved the booking cannot be produced on
+purpose with the phone; it is covered by the backend and web E2E tests.
+
+### Phase 5D: organisation access (this PR)
+
+Run these SQL statements **only against the copy** (any SQLite tool, e.g.
+Python's `sqlite3`), while the 5013 API runs. `Test ApS` is your
+organisation in the copy; replace the name if yours differs.
+
+```sql
+-- P1: a placeholder second Owner (no Microsoft account behind it)
+INSERT INTO "Users" ("PublicId", "DisplayName", "CreatedUtc")
+VALUES ('5D5D5D5D-0000-4000-8000-000000000001', 'Placeholder Owner', 638000000000000000);
+INSERT INTO "Memberships" ("OrganizationId", "UserId", "Role", "CreatedUtc")
+SELECT o."Id", u."Id", 'Owner', 638000000000000000
+FROM "Organizations" o, "Users" u
+WHERE o."Name" = 'Test ApS' AND u."PublicId" = '5D5D5D5D-0000-4000-8000-000000000001';
+
+-- P2: make yourself a Member of Test ApS (allowed: another Owner exists)
+UPDATE "Memberships" SET "Role" = 'Member'
+WHERE "OrganizationId" = (SELECT "Id" FROM "Organizations" WHERE "Name" = 'Test ApS')
+  AND "UserId" <> (SELECT "Id" FROM "Users" WHERE "PublicId" = '5D5D5D5D-0000-4000-8000-000000000001');
+
+-- P3: remove yourself from Test ApS
+DELETE FROM "Memberships"
+WHERE "OrganizationId" = (SELECT "Id" FROM "Organizations" WHERE "Name" = 'Test ApS')
+  AND "UserId" <> (SELECT "Id" FROM "Users" WHERE "PublicId" = '5D5D5D5D-0000-4000-8000-000000000001');
+```
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| D4 | Test ApS active, *Administrer organisation* open. Run P1 and P2. Press Home, wait at least 30 s, return to the app | The administration page closes; *Din rolle i Test ApS er ændret* / *Du er nu medlem…*; the role badge says *Medlem*; *Administrer organisation* is no longer offered | Not run |
+| D5 | Run P3. Tap *Søg efter ledige lokaler* (no waiting) | The API refuses the search (`404 organization_not_found`, visible in the 5013 API log); the app switches to your other organisation (or onboarding) with *Du har ikke længere adgang til Test ApS* (the search error may flash briefly); no Test ApS rooms or bookings stay on screen | Not run |
+| D6 | Flight mode on, Home, wait 30 s, return | *Kunne ikke opdatere dine organisationer … Serveren afgør stadig, hvad du må.* with *Prøv igen*; the list stays | Not run |
+| D7 | Flight mode off, tap *Prøv igen* | The warning disappears; the list is current | Not run |
+| D8 | Optional, on the copy: `UPDATE "Users" SET "DisabledUtc" = 638100000000000000 WHERE "PublicId" <> '5D5D5D5D-0000-4000-8000-000000000001';` then return to the app after 30 s | *Kunne ikke hente dine organisationer* with the disabled-account text; no organisation usable. Undo with `… SET "DisabledUtc" = NULL …` and *Prøv igen* | Not run |
+
+The 5013 API log shows one `GET /api/organizations` per return to the
+foreground after 30 s, and none within 30 s (*Logged* evidence).
+
 ## Sign-in against a local API over USB
 
 A bearer token is never sent over plain HTTP across a network, so the usual

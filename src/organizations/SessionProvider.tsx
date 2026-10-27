@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { Linking } from 'react-native';
+import { AppState, Linking } from 'react-native';
 
 import type { ServerIdentity } from '../api/current-user';
 import { describeError } from '../api/error-messages';
+import { setAccessChangedListener } from '../api/http-client';
 import { liveOrganizationsApi } from '../api/organizations-api';
 import { useAuth } from '../auth/AuthProvider';
 import { useServerIdentity } from '../hooks/useServerIdentity';
@@ -52,6 +53,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // changing (a recheck) refreshes inside activate.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the user's ID on purpose (see above)
   }, [controller, registeredId]);
+
+  // Memberships can change on another device. The list is brought up to date
+  // when the app returns to the foreground and when an API answer says the
+  // access changed (removed, demoted, disabled); switching organisation and
+  // "Prøv igen" sync in the controller. No polling timer.
+  useEffect(() => {
+    setAccessChangedListener(() => void controller.sync('access-changed'));
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void controller.sync('foreground');
+    });
+    return () => {
+      setAccessChangedListener(null);
+      // React Native Web returns nothing where the browser has no Page Visibility API.
+      subscription?.remove();
+    };
+  }, [controller]);
 
   return (
     <SessionContext.Provider

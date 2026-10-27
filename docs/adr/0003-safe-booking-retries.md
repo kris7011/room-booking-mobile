@@ -1,6 +1,7 @@
 # ADR 0003: Safe booking retries with an Idempotency-Key per booking operation
 
-- **Status:** Proposed (Phase 5D, in review; needs backend PR #18)
+- **Status:** Accepted. On `main` through PR #26; the backend side through
+  backend PR #18.
 - **Code:** `src/bookings/booking-submission.ts`, `src/components/BookingArea.tsx`,
   `src/components/BookingForm.tsx`, `src/api/http-client.ts` (`idempotencyHeaders`),
   `src/api/live-api.ts`, `src/api/organizations-api.ts`
