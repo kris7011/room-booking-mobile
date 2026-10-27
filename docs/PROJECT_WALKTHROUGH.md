@@ -56,6 +56,7 @@ src/
   auth/                    Microsoft sign-in: AuthController, token client, ID token, SecureStore session
   api/                     http-client.ts (fetch, tokens, errors), live/demo/organisation API clients
   organizations/           OrganizationController, SessionProvider, permissions, invitation links
+  bookings/                booking-submission.ts: Idempotency-Key per booking, safe retry after a lost answer
   screens/                 AppScreens (booking ↔ administration), HomeScreen, OrganizationAdminScreen
   components/              Presentational components; admin/ and organizations/ sub-folders
   models/                  TypeScript types mirroring the API contracts
@@ -169,6 +170,28 @@ Code: [`http-client.ts`](../src/api/http-client.ts).
   administration screens meet are in `organizations/organization-messages.ts`,
   which falls back to `error-messages.ts`.
 
+### Safe booking retries [Tested, In review]
+
+Code: [`booking-submission.ts`](../src/bookings/booking-submission.ts),
+[`BookingArea.tsx`](../src/components/BookingArea.tsx); rationale in
+[ADR 0003](adr/0003-safe-booking-retries.md); the API side is backend ADR 0005.
+
+- Every booking operation carries a random v4 UUID as `Idempotency-Key`
+  (`attemptFor`). Exactly the same request again keeps the key; a changed
+  room, time, title or name is a new operation with a new key.
+- `isOutcomeUncertain`: after a timeout, a dropped connection, a `5xx` or an
+  unreadable success the booking **may** exist. The app then shows "Vi ved
+  ikke, om bookingen blev oprettet" with **Prøv igen**, keeps the draft and the
+  key, and reloads the upcoming bookings. It never says the booking failed.
+- **Prøv igen** sends the stored request unchanged. The API answers with the
+  booking it already saved (`200`) or creates it (`201`); either way the app
+  shows "Booking oprettet" and there is one booking.
+- `BookingArea` keeps the submission, so closing the form or searching again
+  keeps the key (the warning then shows above the results). A `4xx` refusal or
+  a booking ends the operation and drops the key.
+- New Danish messages: `created_booking_deleted` (`410`) and
+  `idempotency_key_reused` (`422`).
+
 ### Where a token may be sent [Tested]
 
 `canSendBearerToken(url, { development })` is the security boundary for
@@ -247,10 +270,10 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 
 | Layer | What | Status |
 | --- | --- | --- |
-| Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, date/time and search logic, plus Git ignore-behaviour tests | 349 tests passed on 2026-10-24 (PR #12) |
+| Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors), API clients against a mocked `fetch` that copies the backend contract, organisation controller and rules, booking submission and retries, date/time and search logic, plus Git ignore-behaviour tests | 407 tests passed on 2026-10-27 (Phase 5D PR B; 365 on `main` `7db55b7` before it) |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-24 |
 | Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-26 (Phase 5B); a deliberate unused variable made it exit 1 |
-| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message | 31 tests passed on 2026-10-24 in CI; the relevant backend changes from PR #13 are now on backend `main` (`E2E_BACKEND_DIR`) |
+| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 37 tests passed on 2026-10-27 locally against backend PR #18 (`E2E_BACKEND_DIR`); 34 on `main` before it |
 | Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-24 after `e104927` (matching Expo dependencies are on `main` through merged PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
 | Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). Not run: work or school account, a new user's first sign-in, Admin/Member views, the sole-Owner member list of PR #22, cancelled and offline sign-in, token renewal, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
@@ -310,6 +333,7 @@ new sign-in after sign-out; signed-in requests to the local API over
 | Token transport rule in the app; API chosen at bundle time | Security does not depend on configuration discipline | Switching servers needs a Metro restart or a new build | [ADR 0002](adr/0002-api-target-and-token-transport.md) |
 | Logic in framework-free modules with injected dependencies | Fast, deterministic tests without a device | More wiring code | – |
 | React `key` per organisation | Impossible to show the previous organisation's state | Re-mounts the booking area on every switch | – |
+| Idempotency-Key per booking operation, kept by `BookingArea` until the outcome is certain | A lost answer can be retried without a duplicate or a false "failed" | Key in memory only | [ADR 0003](adr/0003-safe-booking-retries.md) |
 | Plain state instead of Expo Router | Two screens do not need a router | Would need migration if navigation grows | – |
 
 ## 11. Known limitations
@@ -345,6 +369,11 @@ new sign-in after sign-out; signed-in requests to the local API over
 - **Sign-in needs the internet** (Microsoft Entra), also when the API runs
   locally.
 - **No offline mode**: bookings are not cached or queued.
+- **A booking's Idempotency-Key lives in memory.** If the app is killed while
+  the outcome is uncertain, the next attempt is a new request; for the same
+  slot the API then answers `409 booking_overlap`. The web build needs a
+  backend whose Development CORS allows `Idempotency-Key` (backend PR #18);
+  an older API ignores the header on Android.
 
 ## 12. How this project was built
 

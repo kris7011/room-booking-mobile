@@ -162,6 +162,18 @@ describe('booking per organisation', () => {
     assert.equal(new URL(calls[3].url).searchParams.get('fromUtc'), '2031-01-01T00:00:00.000Z');
   });
 
+  test('a booking carries its Idempotency-Key to the organisation endpoint, and none without one', async () => {
+    stubFetch(() => json(201, { id: 1 }));
+    const api = organizationRoomBookingApi(ACME);
+    const request = { roomId: 3, title: 'Møde', bookedBy: 'Kris', startUtc: '2031-01-01T09:00:00.000Z', endUtc: '2031-01-01T10:00:00.000Z' };
+
+    await api.createBooking(request, { idempotencyKey: 'key-1' });
+    await api.createBooking(request);
+
+    assert.equal(calls[0].headers['Idempotency-Key'], 'key-1');
+    assert.equal('Idempotency-Key' in calls[1].headers, false);
+  });
+
   test('switching organisation switches every request; the previous one is never asked again', async () => {
     stubFetch(() => json(200, []));
 

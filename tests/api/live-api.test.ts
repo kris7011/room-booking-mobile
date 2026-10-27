@@ -162,6 +162,26 @@ describe('POST /api/bookings', () => {
     assert.deepEqual(JSON.parse(String(init.body)), bookingRequest);
   });
 
+  test('sends the Idempotency-Key when the booking has one', async () => {
+    const fetchMock = stubFetch(() => json(201, { id: 42 }));
+
+    await liveApi.createBooking(bookingRequest, { idempotencyKey: '0b5c7a7e-2f7e-4a8e-9d55-3c1f8a1e9b10' });
+
+    const [, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
+    assert.deepEqual(init.headers, {
+      'Idempotency-Key': '0b5c7a7e-2f7e-4a8e-9d55-3c1f8a1e9b10',
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    });
+  });
+
+  test('a repeated booking answered with 200 (Idempotent-Replayed) is a success like 201', async () => {
+    const created = { id: 42, title: 'Sprint planning' };
+    stubFetch(() => new Response(JSON.stringify(created), { status: 200, headers: { 'Idempotent-Replayed': 'true' } }));
+
+    assert.deepEqual(await liveApi.createBooking(bookingRequest, { idempotencyKey: 'k' }), created);
+  });
+
   test('409 booking_overlap is exposed via problem.code', async () => {
     stubFetch(() =>
       problem(409, {
