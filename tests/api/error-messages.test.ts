@@ -88,4 +88,32 @@ describe('describeError', () => {
   test('other statuses without a problem body show the status code', () => {
     assert.equal(describeError(new ApiError('http', 'x', 418)), 'Forespørgslen fejlede (HTTP 418).');
   });
+
+  // Searching and booking use describeError. When access is lost while the
+  // app is open (removed, demoted or disabled on another device), the API's
+  // answer is one of these problems, which carry an English detail for
+  // developers (ApiProblems.cs and BookingEndpoints.cs in the API).
+  describe('lost access while searching or booking is explained in Danish, not with the API\'s English detail', () => {
+    const cases = [
+      { status: 404, code: 'organization_not_found', detail: 'The organisation does not exist, or you are not a member of it.', danish: /ikke medlem af den længere/ },
+      { status: 403, code: 'organization_permission_denied', detail: 'Your role in this organisation does not allow this.', danish: /Din rolle/ },
+      { status: 403, code: 'user_disabled', detail: 'This user account has been disabled.', danish: /deaktiveret/ },
+      { status: 403, code: 'user_not_registered', detail: 'Register with POST /api/me/registration before using this endpoint.', danish: /ikke registreret/ },
+      { status: 404, code: 'booking_not_found', detail: 'Booking 7 does not exist.', danish: /Bookingen findes ikke længere/ },
+      {
+        status: 403,
+        code: 'booking_permission_denied',
+        detail: 'Members can only change and delete bookings they made themselves. Ask an Owner or Admin.',
+        danish: /egne bookinger/,
+      },
+    ];
+
+    for (const { status, code, detail, danish } of cases) {
+      test(`${status} ${code}`, () => {
+        const message = describeError(new ApiError('http', detail, status, { status, title: 'x', detail, code }));
+        assert.match(message, danish);
+        assert.ok(!message.includes(detail), `the API's English detail was shown: ${message}`);
+      });
+    }
+  });
 });

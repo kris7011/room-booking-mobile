@@ -43,14 +43,29 @@ export function describeError(error: unknown): string {
   }
 }
 
+/**
+ * The API's problem codes that any organisation request can return, in
+ * Danish. The API's own title and detail are English and meant for
+ * developers. Access can be lost while the app is open (removed, demoted or
+ * disabled on another device), so searching and booking get these too.
+ * Codes only the administration screens meet are in organization-messages.ts.
+ */
+const PROBLEM_MESSAGES: Readonly<Record<string, string>> = {
+  booking_overlap: 'Lokalet er allerede booket i det valgte tidsrum. Søg igen for at se ledige lokaler.',
+  meeting_room_not_found: 'Mødelokalet findes ikke længere.',
+  booking_not_found: 'Bookingen findes ikke længere.',
+  booking_permission_denied: 'Du kan kun ændre og slette dine egne bookinger.',
+  organization_not_found: 'Organisationen findes ikke, eller du er ikke medlem af den længere.',
+  organization_permission_denied: 'Din rolle i organisationen giver ikke adgang til dette.',
+  user_not_registered: 'Du er ikke registreret i Room Booking endnu. Log ud og ind igen.',
+  user_disabled: 'Din Room Booking-konto er deaktiveret.',
+};
+
 function describeHttpError(error: ApiError): string {
   const code = error.problem?.code;
 
-  if (code === 'booking_overlap') {
-    return 'Lokalet er allerede booket i det valgte tidsrum. Søg igen for at se ledige lokaler.';
-  }
-  if (code === 'meeting_room_not_found') {
-    return 'Mødelokalet findes ikke længere.';
+  if (code && PROBLEM_MESSAGES[code]) {
+    return PROBLEM_MESSAGES[code];
   }
 
   if (isStartNotInFutureError(error)) {
