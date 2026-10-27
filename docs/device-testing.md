@@ -41,6 +41,7 @@ Each result says where it comes from:
 | Existing memberships (Legacy and Test ApS, role *Ejer*) shown after sign-in | **Passed**, 26 October | owner report; logged |
 | Signed-in booking in Test ApS: search, book, see it in *Kommende bookinger*, still there after restarting the app | **Passed**, 26 October | owner report. The booking was on screen during the checks below (logged, read only) |
 | [Organisation administration as Owner](#organisation-administration-checklist-26-october-2026) | **Passed**, 26 October; Admin, Member and invitee views not run | logged |
+| [Sole-Owner member list](#phase-5c-sole-owner-member-list) (PR #22, issue #20): no role chips or *Forlad organisationen* for the only Owner, and the explanation instead | **Not run** on the device. Unit-tested (`memberActions`, `isSoleOwner`, `describeSoleOwner`) | – |
 | Signed-in requests to a `127.0.0.1`-only API through `adb reverse tcp:5003 tcp:5003` | **Passed**, 26 October | logged (API log) |
 | Work or school account sign-in | **Not run**: no such account available | – |
 | First sign-in of a new, unregistered account | **Not run**: needs a second account | – |
@@ -114,6 +115,74 @@ ownership; not yet re-checked on the device.
 
 **Tooling note:** `uiautomator dump` was killed on this phone (low memory);
 `adb exec-out screencap -p` worked.
+
+## Phase 5C: manual checks for the owner
+
+Written in Phase 5C (27 October 2026) for the checks that only the owner can
+do on the Samsung. Every result below is **Not run** until it has been done
+and recorded with its evidence label (*Owner report* or *Logged*, see
+[Current status](#current-status)). Nothing here needs a second Microsoft
+account or writes to the real development database.
+
+### Before you start
+
+1. **JavaScript from `main`.** The member-list change (PR #22) is JavaScript
+   only. Since the development build installed on 26 October (from
+   `7bf2153`), `package.json` only gained the dev-only ESLint packages
+   (PR #21) and `app.json` is unchanged, so that build can load the current
+   JavaScript without rebuilding. Start Metro from a checkout at `main`
+   (`8282923` or later) that has your `.env.local`. If Metro is already
+   running from an older checkout, stop it yourself and start it again from
+   the updated one.
+2. **API and USB** as in
+   [Sign-in against a local API over USB](#sign-in-against-a-local-api-over-usb)
+   (`adb reverse tcp:5003 tcp:5003`). If the development client cannot reach
+   Metro over Wi-Fi (Windows Firewall), also run `adb reverse tcp:8081 tcp:8081`
+   and open
+   `exp+room-booking-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081`.
+3. **Fresh JavaScript.** Force-stop the app and open it again, so it loads the
+   new bundle and not a cached one.
+4. Keep screenshots and logs to yourself: they show your name and e-mail.
+
+### Phase 5C: sole-Owner member list
+
+Read only: viewing the member list changes nothing. Expected texts are those
+of `describeSoleOwner` in
+[`organization-messages.ts`](../src/organizations/organization-messages.ts).
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| S1 | Signed in, *Aktiv organisation* Test ApS, tap *Administrer organisation* | The administration page opens; *Medlemmer* lists you with *(dig)* and the role *Ejer* | Not run |
+| S2 | Look at your own row while the list is loading (often too fast to see; then record *not observable*) | No role chips and no *Forlad organisationen* while *Henter medlemmer…* shows | Not run |
+| S3 | Your own row after loading (you are the only member and the only Owner) | No role chips, no *Forlad organisationen*; the text *Du er den eneste ejer og det eneste medlem. Inviter en anden og gør vedkommende til ejer, før du kan ændre din egen rolle eller forlade organisationen.* | Not run |
+| S4 | TalkBack on, move to that text | TalkBack reads the explanation | Not run |
+| S5 | Back to booking, switch to Legacy, open *Administrer organisation* | If you are Legacy's only Owner and it has other members: no chips and no *Forlad organisationen* on your row, the text *Du er den eneste ejer, så du kan ikke ændre din egen rolle…*, and the chips and *Fjern fra organisationen* still offered on the other members' rows (do not tap them). If you are the only member: as S3 | Not run |
+| S6 | Android back button, switch back to Test ApS | The booking page shows Test ApS's rooms and bookings, no Legacy data | Not run |
+
+**Cannot be checked with one account:** a second Owner (each Owner then gets
+chips and *Forlad organisationen* on their own row), and the Admin and Member
+views of the list. These are covered by the unit tests in
+`tests/organizations/organization-rules.test.ts`; the API still refuses
+`last_owner` (backend `MemberManagementTests`).
+
+### Phase 5C: sign-in steps still open
+
+The remaining [sign-in checklist](#sign-in-checklist) steps that work with
+the one personal account, in a suggested order. They change nothing in the
+database.
+
+| Step | What it shows | Result |
+|---|---|---|
+| 3 | Cancelled login: *Login blev annulleret.*, no error, still signed out | Not run |
+| 9 | Logout, then sign-in again: signed out at once, the account picker appears | Owner report, 26 October (see the table above); no log recorded |
+| 7 | Offline start: flight mode, restart, signed in with *Kunne ikke få forbindelse til Microsoft…*; with the network back, a search works | Not run |
+| 6 | Silent renewal after more than an hour in the background: a search works without a browser login | Not run |
+| 10 | SecureStore holds ciphertext only, and nothing after logout | Not run |
+| 11 | No token, code or code verifier in Metro or `adb logcat` during the steps above | Not run |
+| 8 | Revoked session (*Sign out everywhere* on account.microsoft.com, or a password change), then restart: *Din Microsoft-session er udløbet* | Not run; this signs the account out on every device |
+
+Steps 1, 2 and the first sign-in of a new account need a work or school
+account or a second account, and stay **Not run**.
 
 ### Personal-account rejection, 23 October 2026
 
