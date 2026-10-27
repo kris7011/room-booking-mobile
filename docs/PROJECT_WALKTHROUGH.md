@@ -170,7 +170,7 @@ Code: [`http-client.ts`](../src/api/http-client.ts).
   administration screens meet are in `organizations/organization-messages.ts`,
   which falls back to `error-messages.ts`.
 
-### Safe booking retries [Tested, In review]
+### Safe booking retries [Tested]
 
 Code: [`booking-submission.ts`](../src/bookings/booking-submission.ts),
 [`BookingArea.tsx`](../src/components/BookingArea.tsx); rationale in
