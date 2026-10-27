@@ -40,9 +40,15 @@ interface BookingAreaProps {
   api: RoomBookingApi;
   /** Shown above the room overview, e.g. "Mødelokaler i Acme". */
   roomsTitle?: string;
+  /**
+   * The user's role in the organisation. When it changes, the upcoming
+   * bookings (whose delete actions depend on it) are fetched again; the
+   * search and the draft stay.
+   */
+  role?: string;
 }
 
-export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
+export function BookingArea({ api, roomsTitle, role }: BookingAreaProps) {
   // Renewed every half hour, at midnight and when the app returns from the
   // background, so the default time, "I dag"/"I morgen" and the validation
   // below stay current while the app is left open.
@@ -323,7 +329,7 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
         <AllRoomsList state={allRooms} onRetry={() => void loadAllRooms()} title={roomsTitle} />
       )}
 
-      {api.listBookings ? <UpcomingBookings api={api} now={now} version={bookingsVersion} /> : null}
+      {api.listBookings ? <UpcomingBookings key={role ?? 'no-role'} api={api} now={now} version={bookingsVersion} /> : null}
     </View>
   );
 }

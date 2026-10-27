@@ -48,6 +48,29 @@ export function setAccessTokenProvider(provider: AccessTokenProvider | null): vo
 }
 
 /**
+ * Problem codes that mean the caller's membership, role or account changed
+ * since the app last asked: removed (or the organisation is gone), demoted,
+ * disabled, or no longer registered.
+ */
+export const ACCESS_CHANGED_CODES: ReadonlySet<string> = new Set([
+  'organization_not_found',
+  'organization_permission_denied',
+  'user_disabled',
+  'user_not_registered',
+]);
+
+let accessChangedListener: ((code: string) => void) | null = null;
+
+/**
+ * Registers (or with null removes) who is told when an answer has one of
+ * ACCESS_CHANGED_CODES, so the organisation list can be brought up to date
+ * from wherever the request was made. Told before the request rejects.
+ */
+export function setAccessChangedListener(listener: ((code: string) => void) | null): void {
+  accessChangedListener = listener;
+}
+
+/**
  * Where a bearer token may be sent:
  *
  * - Release bundle: only over HTTPS.
@@ -207,6 +230,7 @@ async function readResponse<T>(url: string, response: Response): Promise<T> {
 
   if (!response.ok) {
     const problem = isProblemDetails(payload) ? payload : undefined;
+    if (problem?.code && ACCESS_CHANGED_CODES.has(problem.code)) notifyAccessChanged(problem.code);
     throw new ApiError(
       'http',
       problem?.detail ?? problem?.title ?? `HTTP ${response.status} from ${url}`,
@@ -216,6 +240,14 @@ async function readResponse<T>(url: string, response: Response): Promise<T> {
   }
 
   return payload as T;
+}
+
+function notifyAccessChanged(code: string): void {
+  try {
+    accessChangedListener?.(code);
+  } catch {
+    // A listener's failure must not replace the request's own error.
+  }
 }
 
 function isProblemDetails(value: unknown): value is ProblemDetails {

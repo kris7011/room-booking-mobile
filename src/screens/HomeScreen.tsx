@@ -31,7 +31,14 @@ export function HomeScreen({ onOpenAdmin }: { onOpenAdmin: () => void }) {
     // Keyed by the organisation: switching starts the search, results and
     // forms afresh, so nothing of the previous organisation stays visible.
     if (active && organizationApi) {
-      booking = <BookingArea key={active.publicId} api={organizationApi} roomsTitle={`Mødelokaler i ${active.name}`} />;
+      booking = (
+        <BookingArea
+          key={active.publicId}
+          api={organizationApi}
+          roomsTitle={`Mødelokaler i ${active.name}`}
+          role={active.role}
+        />
+      );
     }
   } else if (identity && identity.status !== 'checking' && identity.status !== 'registering') {
     // An API without registration or organisations: the original endpoints.

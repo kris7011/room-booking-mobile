@@ -5,6 +5,7 @@ import { ApiError } from '../../src/api/http-client';
 import type { Organization } from '../../src/models/organization';
 import {
   OrganizationController,
+  FOREGROUND_SYNC_INTERVAL_MS,
   selectionKey,
   type OrganizationsState,
 } from '../../src/organizations/organization-controller';
@@ -202,9 +203,12 @@ describe('switching', () => {
     pending[0].resolve([ACME, LEGACY]);
     await first;
     controller.select(LEGACY.publicId);
+    // A switch checks the access with the API.
+    pending[1].resolve([ACME, LEGACY]);
+    await settle();
 
     const refresh = controller.refresh();
-    pending[1].resolve([ACME, LEGACY, ZETA]);
+    pending[2].resolve([ACME, LEGACY, ZETA]);
     await refresh;
     assert.equal(ready(controller.getState()).active?.publicId, LEGACY.publicId);
   });
@@ -259,11 +263,12 @@ describe('stale data', () => {
     pending[0].resolve([ACME, LEGACY]);
     await first;
     controller.select(LEGACY.publicId);
+    pending[1].resolve([ACME, LEGACY]);
     await settle();
 
     controller.deactivate();
     const second = controller.activate(OTHER_USER);
-    pending[1].resolve([ACME, LEGACY]);
+    pending[2].resolve([ACME, LEGACY]);
     await second;
     assert.equal(ready(controller.getState()).active?.publicId, ACME.publicId);
   });
@@ -315,4 +320,299 @@ describe('membership changes', () => {
 
 test('selection keys only use characters SecureStore accepts', () => {
   assert.match(selectionKey('a b/c'), /^[A-Za-z0-9._-]+$/);
+});
+
+describe('synchronising access while the app runs', () => {
+  /** A controller with a clock the test moves, loaded with `initial` (and `activeId` chosen). */
+  async function loaded(initial: Organization[], activeId?: string) {
+    let now = 1_000_000;
+    const { api, pending } = fakeApi();
+    const controller = new OrganizationController({
+      api,
+      store: new MemoryStore(),
+      describe: (error) => `described: ${String(error)}`,
+      now: () => now,
+    });
+    const first = controller.activate(USER);
+    pending[0].resolve(initial);
+    await first;
+    if (activeId) {
+      controller.select(activeId);
+      // A switch checks the access; answer with the same list.
+      pending.at(-1)!.resolve(initial);
+      await settle();
+    }
+    return {
+      controller,
+      pending,
+      advance: (ms: number) => {
+        now += ms;
+      },
+    };
+  }
+
+  describe('revoked membership', () => {
+    test('the active organisation is gone: another becomes active, with a notice', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY], LEGACY.publicId);
+
+      const sync = controller.sync('access-changed');
+      pending.at(-1)!.resolve([ACME]);
+      await sync;
+
+      const state = ready(controller.getState());
+      assert.equal(state.active?.publicId, ACME.publicId);
+      assert.deepEqual(state.organizations, [ACME]);
+      assert.deepEqual(state.notice, { kind: 'access-removed', organizationName: 'Legacy' });
+    });
+
+    test('the last organisation is gone: nothing is active (onboarding), with a notice', async () => {
+      const { controller, pending, advance } = await loaded([ACME]);
+      advance(FOREGROUND_SYNC_INTERVAL_MS);
+
+      const sync = controller.sync('foreground');
+      pending.at(-1)!.resolve([]);
+      await sync;
+
+      const state = ready(controller.getState());
+      assert.equal(state.active, null);
+      assert.deepEqual(state.organizations, []);
+      assert.equal(state.notice?.kind, 'access-removed');
+    });
+
+    test('losing an organisation the user is not working in changes the list quietly', async () => {
+      const { controller, pending } = await loaded([ACME, ZETA]);
+
+      const sync = controller.sync('manual');
+      pending.at(-1)!.resolve([ACME]);
+      await sync;
+
+      const state = ready(controller.getState());
+      assert.equal(state.active?.publicId, ACME.publicId);
+      assert.equal(state.notice, null);
+    });
+
+    test('the notice stays until dismissed, also across a quiet sync', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY], LEGACY.publicId);
+      const first = controller.sync('access-changed');
+      pending.at(-1)!.resolve([ACME]);
+      await first;
+
+      const second = controller.sync('manual');
+      pending.at(-1)!.resolve([ACME]);
+      await second;
+      assert.equal(ready(controller.getState()).notice?.kind, 'access-removed');
+
+      controller.dismissNotice();
+      assert.equal(ready(controller.getState()).notice, null);
+    });
+  });
+
+  describe('disabled or unregistered account', () => {
+    for (const code of ['user_disabled', 'user_not_registered']) {
+      test(`${code}: no organisation stays usable, not even the cached list`, async () => {
+        const { controller, pending } = await loaded([ACME, LEGACY]);
+
+        const sync = controller.sync('access-changed');
+        pending.at(-1)!.reject(new ApiError('http', code, 403, { status: 403, code }));
+        await sync;
+
+        assert.equal(controller.getState().status, 'error');
+        assert.equal(controller.active, null);
+      });
+    }
+  });
+
+  describe('role changes', () => {
+    test('demoted in the active organisation: the active role follows the API, with a notice', async () => {
+      const { controller, pending, advance } = await loaded([ACME, LEGACY], LEGACY.publicId);
+      assert.equal(controller.active?.role, 'Owner');
+      advance(FOREGROUND_SYNC_INTERVAL_MS);
+
+      const sync = controller.sync('foreground');
+      pending.at(-1)!.resolve([ACME, { ...LEGACY, role: 'Member' }]);
+      await sync;
+
+      const state = ready(controller.getState());
+      assert.equal(state.active?.publicId, LEGACY.publicId);
+      assert.equal(state.active?.role, 'Member');
+      assert.deepEqual(state.notice, { kind: 'role-changed', organizationName: 'Legacy', role: 'Member' });
+    });
+
+    test('a change the user made here (refresh with the organisation) is not announced', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY], LEGACY.publicId);
+
+      const refresh = controller.refresh(LEGACY.publicId);
+      pending.at(-1)!.resolve([ACME, { ...LEGACY, role: 'Admin' }]);
+      await refresh;
+
+      const state = ready(controller.getState());
+      assert.equal(state.active?.role, 'Admin');
+      assert.equal(state.notice, null);
+    });
+  });
+
+  describe('switching organisation', () => {
+    test('a switch shows the new organisation at once and checks the access with the API', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY]);
+      const requests = pending.length;
+
+      controller.select(LEGACY.publicId);
+      assert.equal(controller.active?.publicId, LEGACY.publicId);
+      assert.equal(pending.length, requests + 1);
+
+      // The API no longer lists it: the app falls back and says why.
+      pending.at(-1)!.resolve([ACME]);
+      await settle();
+      assert.equal(controller.active?.publicId, ACME.publicId);
+      assert.equal(ready(controller.getState()).notice?.kind, 'access-removed');
+    });
+
+    test('switching while a sync is on its way keeps the new choice (failed on main before this change)', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY]);
+
+      const sync = controller.sync('manual');
+      controller.select(LEGACY.publicId);
+      pending.at(-1)!.resolve([ACME, LEGACY]);
+      await sync;
+
+      assert.equal(controller.active?.publicId, LEGACY.publicId);
+      assert.equal(ready(controller.getState()).notice, null);
+    });
+  });
+
+  describe('offline', () => {
+    test('a failed sync keeps the list, marks it out of date, and a later sync recovers', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY]);
+
+      const offline = controller.sync('manual');
+      pending.at(-1)!.reject(new ApiError('network', 'down'));
+      await offline;
+
+      let state = ready(controller.getState());
+      assert.equal(state.organizations.length, 2);
+      assert.equal(state.syncError, 'described: ApiError: down');
+
+      // Back online: a foreground sync is not skipped while the list is out of date.
+      const requests = pending.length;
+      const back = controller.sync('foreground');
+      assert.equal(pending.length, requests + 1);
+      pending.at(-1)!.resolve([ACME]);
+      await back;
+
+      state = ready(controller.getState());
+      assert.equal(state.syncError, null);
+      assert.deepEqual(state.organizations, [ACME]);
+    });
+
+    test('a server error while syncing is treated like offline, not as lost access', async () => {
+      const { controller, pending } = await loaded([ACME]);
+
+      const sync = controller.sync('access-changed');
+      pending.at(-1)!.reject(new ApiError('http', 'oops', 503, { status: 503 }));
+      await sync;
+
+      const state = ready(controller.getState());
+      assert.equal(state.active?.publicId, ACME.publicId);
+      assert.notEqual(state.syncError, null);
+    });
+  });
+
+  describe('concurrent and repeated syncs', () => {
+    test('syncs while one is running join it: one request', async () => {
+      const { controller, pending } = await loaded([ACME]);
+      const before = pending.length;
+
+      const first = controller.sync('access-changed');
+      const second = controller.sync('access-changed');
+      const third = controller.sync('manual');
+      assert.equal(pending.length, before + 1);
+
+      pending.at(-1)!.resolve([ACME]);
+      await Promise.all([first, second, third]);
+      assert.equal(pending.length, before + 1);
+    });
+
+    test('a foreground sync is skipped while the list is fresh, and runs once it is older', async () => {
+      const { controller, pending, advance } = await loaded([ACME]);
+      const before = pending.length;
+
+      await controller.sync('foreground');
+      assert.equal(pending.length, before);
+
+      advance(FOREGROUND_SYNC_INTERVAL_MS - 1);
+      await controller.sync('foreground');
+      assert.equal(pending.length, before);
+
+      advance(1);
+      const sync = controller.sync('foreground');
+      assert.equal(pending.length, before + 1);
+      pending.at(-1)!.resolve([ACME]);
+      await sync;
+    });
+
+    test('an access-changed sync is never skipped for freshness', async () => {
+      const { controller, pending } = await loaded([ACME]);
+      const before = pending.length;
+      const sync = controller.sync('access-changed');
+      assert.equal(pending.length, before + 1);
+      pending.at(-1)!.resolve([ACME]);
+      await sync;
+    });
+  });
+
+  describe('delayed answers', () => {
+    test('an organisation created while a sync is on its way is not dropped (failed on main before this change)', async () => {
+      const { controller, pending } = await loaded([ACME]);
+
+      const sync = controller.sync('manual');
+      controller.added({ ...ZETA, role: 'Owner' });
+      pending.at(-1)!.resolve([ACME]);
+      await sync;
+
+      const state = ready(controller.getState());
+      assert.equal(state.active?.publicId, ZETA.publicId);
+      assert.equal(state.organizations.length, 2);
+    });
+
+    test('an organisation left while a sync is on its way does not come back', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY], LEGACY.publicId);
+
+      const sync = controller.sync('manual');
+      controller.removed(LEGACY.publicId);
+      pending.at(-1)!.resolve([ACME, LEGACY]);
+      await sync;
+
+      assert.deepEqual(ready(controller.getState()).organizations, [ACME]);
+    });
+  });
+
+  describe('account switching', () => {
+    test('a sync for the previous account is dropped when another signs in', async () => {
+      const { controller, pending } = await loaded([ACME, LEGACY]);
+
+      const oldSync = controller.sync('manual');
+      controller.deactivate();
+      const next = controller.activate(OTHER_USER);
+
+      pending.at(-2)!.resolve([ACME, LEGACY]);
+      await oldSync;
+      assert.equal(controller.getState().status, 'loading');
+
+      pending.at(-1)!.resolve([ZETA]);
+      await next;
+      assert.deepEqual(ready(controller.getState()).organizations, [ZETA]);
+      assert.equal(ready(controller.getState()).notice, null);
+    });
+
+    test('after sign-out nothing is synced', async () => {
+      const { controller, pending } = await loaded([ACME]);
+      controller.deactivate();
+      const before = pending.length;
+
+      await controller.sync('foreground');
+      await controller.sync('access-changed');
+      assert.equal(pending.length, before);
+      assert.equal(controller.getState().status, 'inactive');
+    });
+  });
 });
