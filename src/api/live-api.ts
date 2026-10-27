@@ -1,6 +1,6 @@
 import type { BookingResponse, SaveBookingRequest } from '../models/booking';
 import type { AvailableRoomsQuery, MeetingRoom } from '../models/room';
-import { requestJson } from './http-client';
+import { idempotencyHeaders, requestJson } from './http-client';
 import type { RoomBookingApi } from './room-booking-api';
 
 // Talks to the .NET API at EXPO_PUBLIC_API_URL.
@@ -19,10 +19,11 @@ export const liveApi: RoomBookingApi = {
     });
   },
 
-  createBooking(request: SaveBookingRequest) {
+  createBooking(request: SaveBookingRequest, options) {
     return requestJson<BookingResponse>('/api/bookings', {
       method: 'POST',
       body: request,
+      headers: idempotencyHeaders(options?.idempotencyKey),
     });
   },
 };

@@ -3,9 +3,19 @@ import { StyleSheet, View } from 'react-native';
 
 import { describeError } from '../api/error-messages';
 import type { RoomBookingApi } from '../api/room-booking-api';
+import {
+  IDLE_SUBMISSION,
+  UNCERTAIN_BOOKING_TITLE,
+  attemptFor,
+  pendingAttempt,
+  sendBooking,
+  settle,
+  type BookingAttempt,
+  type BookingSubmission,
+} from '../bookings/booking-submission';
 import { isDemoMode } from '../config/env';
 import { useClock } from '../hooks/useClock';
-import { EMPTY_BOOKING_DRAFT, type BookingDraft, type BookingResponse } from '../models/booking';
+import { EMPTY_BOOKING_DRAFT, type BookingDraft, type BookingResponse, type SaveBookingRequest } from '../models/booking';
 import type { LoadState } from '../models/load-state';
 import type { MeetingRoom } from '../models/room';
 import type { SearchCriteria, SearchWindow } from '../models/search-criteria';
@@ -59,6 +69,11 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
   const [startRejectedByServer, setStartRejectedByServer] = useState(false);
   // Bumped after a booking, so the list of upcoming bookings reloads.
   const [bookingsVersion, setBookingsVersion] = useState(0);
+  // The booking being sent, or one whose answer was lost, with its
+  // Idempotency-Key. Lives here, not in the form, so closing the form or a
+  // new search keeps the key for a safe retry. A new organisation means a
+  // new BookingArea, and with it a new key.
+  const [submission, setSubmission] = useState<BookingSubmission>(IDLE_SUBMISSION);
 
   // Lets us ignore a slow response that arrives after a newer search started.
   const latestSearchId = useRef(0);
@@ -106,6 +121,10 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
     }
   };
 
+  // A refusal belongs to the form it was shown in; an uncertain booking is
+  // kept until it is resolved.
+  const clearFailure = () => setSubmission((current) => (current.status === 'failed' ? IDLE_SUBMISSION : current));
+
   const handleSearch = () => {
     // The clock may lag behind if timers were delayed. Never search for a time
     // that has started; show the current state instead.
@@ -114,7 +133,13 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
       return;
     }
     setLastBooking(null);
+    clearFailure();
     void runSearch(criteria);
+  };
+
+  const handleSelectRoom = (roomId: number | null) => {
+    clearFailure();
+    setSelectedRoomId(roomId);
   };
 
   const handleCriteriaChange = ({ participants: nextParticipants, ...windowChanges }: Partial<SearchCriteria>) => {
@@ -150,6 +175,54 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
     // The clock may lag behind the moment the start passed.
     refreshClock();
   };
+
+  const send = async (attempt: BookingAttempt) => {
+    setSubmission({ status: 'sending', attempt });
+    const outcome = await sendBooking(api, attempt);
+    // Only the attempt being sent may change what is shown.
+    setSubmission((current) => (pendingAttempt(current) === attempt ? settle(attempt, outcome) : current));
+
+    switch (outcome.status) {
+      case 'booked':
+        handleBooked(outcome.booking);
+        break;
+      case 'start-passed':
+        // The server checks the key before the time: nothing was booked.
+        if (searchedCriteria && attempt.request.startUtc === atMinutes(searchedCriteria.day, searchedCriteria.startMinutes).toISOString()) {
+          handleStartPassed(true);
+        } else {
+          setSubmission({
+            status: 'failed',
+            roomId: attempt.request.roomId,
+            message: 'Mødets starttidspunkt er passeret ifølge serveren. Bookingen blev ikke oprettet.',
+          });
+        }
+        break;
+      case 'uncertain':
+        // The list of upcoming bookings may already show it.
+        setBookingsVersion((version) => version + 1);
+        break;
+    }
+  };
+
+  const handleConfirm = (request: SaveBookingRequest) => {
+    if (submission.status === 'sending') return;
+    // The same request again keeps its key; anything else is a new booking.
+    void send(attemptFor(request, pendingAttempt(submission)));
+  };
+
+  const handleRetry = () => {
+    if (submission.status === 'uncertain') void send(submission.attempt);
+  };
+
+  const uncertainAttempt = submission.status === 'uncertain' ? submission.attempt : null;
+  // The open booking form shows it; otherwise it is shown here, so a closed
+  // form or a new search does not hide a booking that may exist.
+  const formShowsUncertain =
+    uncertainAttempt !== null &&
+    search.status === 'success' &&
+    selectedRoomId === uncertainAttempt.request.roomId &&
+    search.data.some((room) => room.id === uncertainAttempt.request.roomId);
 
   const handleChooseNewTime = () => {
     if (!searchedCriteria || !bookingStarted) return;
@@ -202,6 +275,19 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
         />
       ) : null}
 
+      {submission.status === 'uncertain' && !formShowsUncertain ? (
+        <StatusMessage
+          variant="warning"
+          title={UNCERTAIN_BOOKING_TITLE}
+          message={`"${submission.attempt.request.title}", ${formatRange(
+            new Date(submission.attempt.request.startUtc),
+            new Date(submission.attempt.request.endUtc),
+          )}. ${submission.message}`}
+          actionLabel="Prøv igen"
+          onAction={handleRetry}
+        />
+      ) : null}
+
       {showingPreviousSearch && searched ? (
         <StatusMessage
           variant="warning"
@@ -218,13 +304,14 @@ export function BookingArea({ api, roomsTitle }: BookingAreaProps) {
           participants={searched.participants}
           selectedRoomId={selectedRoomId}
           outdated={showingPreviousSearch}
-          onSelectRoom={setSelectedRoomId}
+          onSelectRoom={handleSelectRoom}
           onRetry={() => {
             if (searchedCriteria) void runSearch(searchedCriteria);
           }}
-          onBooked={handleBooked}
           bookingForm={{
-            api,
+            submission,
+            onConfirm: handleConfirm,
+            onRetry: handleRetry,
             draft: bookingDraft,
             onDraftChange: setBookingDraft,
             started: bookingNotice,
