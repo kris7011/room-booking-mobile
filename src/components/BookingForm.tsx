@@ -1,9 +1,8 @@
 import { useRef, useState, type ComponentPropsWithRef } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
 
-import { describeError, isStartNotInFutureError } from '../api/error-messages';
-import type { RoomBookingApi } from '../api/room-booking-api';
-import { MAX_BOOKED_BY_LENGTH, MAX_TITLE_LENGTH, type BookingDraft, type BookingResponse } from '../models/booking';
+import { UNCERTAIN_BOOKING_TITLE, type BookingSubmission } from '../bookings/booking-submission';
+import { MAX_BOOKED_BY_LENGTH, MAX_TITLE_LENGTH, type BookingDraft, type SaveBookingRequest } from '../models/booking';
 import type { MeetingRoom } from '../models/room';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { formatRange } from '../utils/date-time';
@@ -20,8 +19,16 @@ export interface StartedBookingNotice {
 
 /** What the screen provides to the booking form, whichever room is open. */
 export interface BookingFormContext {
-  /** Where the booking is made: the chosen organisation's API, or demo data. */
-  api: RoomBookingApi;
+  /**
+   * The booking being sent, or the last one whose answer was lost or
+   * refused. Kept by the screen with its Idempotency-Key, so closing the
+   * form or searching again does not lose a booking that may exist.
+   */
+  submission: BookingSubmission;
+  /** Sends the booking (a retry if it is exactly the pending one). */
+  onConfirm: (request: SaveBookingRequest) => void;
+  /** Sends the pending booking again, unchanged, with the same key. */
+  onRetry: () => void;
   /** Title and name, kept by the screen so a new search does not lose them. */
   draft: BookingDraft;
   onDraftChange: (draft: BookingDraft) => void;
@@ -39,12 +46,13 @@ interface BookingFormProps extends BookingFormContext {
   outdated: boolean;
   start: Date;
   end: Date;
-  onBooked: (booking: BookingResponse) => void;
   onCancel: () => void;
 }
 
 export function BookingForm({
-  api,
+  submission,
+  onConfirm,
+  onRetry,
   room,
   outdated,
   start,
@@ -54,13 +62,14 @@ export function BookingForm({
   started,
   onChooseNewTime,
   onStartPassed,
-  onBooked,
   onCancel,
 }: BookingFormProps) {
   const { title, bookedBy } = draft;
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showValidation, setShowValidation] = useState(false);
+  const submitting = submission.status === 'sending';
+  // Shown in this form only when they concern this room.
+  const uncertain = submission.status === 'uncertain' && submission.attempt.request.roomId === room.id ? submission : null;
+  const error = submission.status === 'failed' && submission.roomId === room.id ? submission.message : null;
   const bookedByRef = useRef<TextInputInstance>(null);
 
   // Same rules as the API's BookingRequestValidator, checked before sending.
@@ -68,7 +77,7 @@ export function BookingForm({
   const bookedByError = !bookedBy.trim() ? 'Skriv hvem der booker.' : null;
   const isValid = !titleError && !bookedByError;
 
-  const submit = async () => {
+  const submit = () => {
     setShowValidation(true);
     if (!isValid || started || outdated || submitting) return;
 
@@ -79,28 +88,13 @@ export function BookingForm({
       return;
     }
 
-    setSubmitting(true);
-    setError(null);
-    try {
-      const booking = await api.createBooking({
-        roomId: room.id,
-        title: title.trim(),
-        bookedBy: bookedBy.trim(),
-        startUtc: start.toISOString(),
-        endUtc: end.toISOString(),
-      });
-      onBooked(booking);
-    } catch (caught) {
-      if (isStartNotInFutureError(caught)) {
-        // The server's clock says the meeting has started: show the same
-        // notice as when the device notices it, not a generic error.
-        onStartPassed(true);
-      } else {
-        setError(describeError(caught));
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    onConfirm({
+      roomId: room.id,
+      title: title.trim(),
+      bookedBy: bookedBy.trim(),
+      startUtc: start.toISOString(),
+      endUtc: end.toISOString(),
+    });
   };
 
   return (
@@ -137,7 +131,16 @@ export function BookingForm({
         onSubmitEditing={submit}
       />
 
-      {started ? (
+      {uncertain ? (
+        // First: a booking that may exist matters more than a passed start.
+        <StatusMessage
+          variant="warning"
+          title={UNCERTAIN_BOOKING_TITLE}
+          message={uncertain.message}
+          actionLabel="Prøv igen"
+          onAction={onRetry}
+        />
+      ) : started ? (
         <StatusMessage
           variant="warning"
           title="Mødets starttidspunkt er passeret"

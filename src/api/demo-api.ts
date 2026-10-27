@@ -69,6 +69,8 @@ export const demoApi: RoomBookingApi = {
       .sort((a, b) => a.capacity - b.capacity || a.name.localeCompare(b.name));
   },
 
+  // The Idempotency-Key is ignored: nothing is sent anywhere, so no answer
+  // can get lost on the way back.
   async createBooking(request: SaveBookingRequest): Promise<BookingResponse> {
     await delay(DEMO_LATENCY_MS);
     const start = Date.parse(request.startUtc);

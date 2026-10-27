@@ -1,7 +1,6 @@
 import { Fragment } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { BookingResponse } from '../models/booking';
 import type { LoadState } from '../models/load-state';
 import type { MeetingRoom } from '../models/room';
 import { colors, spacing, typography } from '../theme/theme';
@@ -20,7 +19,6 @@ interface SearchResultsProps {
   outdated: boolean;
   onSelectRoom: (roomId: number | null) => void;
   onRetry: () => void;
-  onBooked: (booking: BookingResponse) => void;
   bookingForm: BookingFormContext;
 }
 
@@ -33,7 +31,6 @@ export function SearchResults({
   outdated,
   onSelectRoom,
   onRetry,
-  onBooked,
   bookingForm,
 }: SearchResultsProps) {
   switch (state.status) {
@@ -88,7 +85,6 @@ export function SearchResults({
                     room={room}
                     start={start}
                     end={end}
-                    onBooked={onBooked}
                     onCancel={() => onSelectRoom(null)}
                   />
                 ) : null}

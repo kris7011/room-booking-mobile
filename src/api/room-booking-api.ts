@@ -6,13 +6,23 @@ import { demoApi } from './demo-api';
 import { liveApi } from './live-api';
 import { organizationRoomBookingApi } from './organizations-api';
 
+/** Options for creating a booking. */
+export interface CreateBookingOptions {
+  /**
+   * One random UUID per booking operation, the same one when repeating it
+   * (see src/bookings/booking-submission.ts). The API then answers a repeat
+   * with the booking it already made instead of creating a second one.
+   */
+  idempotencyKey?: string;
+}
+
 // The contract the screens depend on. The live API client (per organisation
 // or the original endpoints) and the demo implementation fulfil it, so the
 // UI does not care which one it talks to.
 export interface RoomBookingApi {
   getRooms(): Promise<MeetingRoom[]>;
   getAvailableRooms(query: AvailableRoomsQuery): Promise<MeetingRoom[]>;
-  createBooking(request: SaveBookingRequest): Promise<BookingResponse>;
+  createBooking(request: SaveBookingRequest, options?: CreateBookingOptions): Promise<BookingResponse>;
   /** Bookings that end after fromUtc. Only where the API says what the user may change. */
   listBookings?(fromUtc: string): Promise<OrganizationBooking[]>;
   deleteBooking?(bookingId: number): Promise<void>;

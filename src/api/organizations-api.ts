@@ -12,7 +12,7 @@ import type {
   SaveRoomRequest,
 } from '../models/organization';
 import type { AvailableRoomsQuery, MeetingRoom } from '../models/room';
-import { requestJson } from './http-client';
+import { idempotencyHeaders, requestJson } from './http-client';
 import type { RoomBookingApi } from './room-booking-api';
 
 /** The organisation endpoints: everything except searching and booking, which go through RoomBookingApi. */
@@ -51,7 +51,7 @@ export const liveOrganizationsApi: OrganizationsApi = {
     requestJson<Organization>('/api/organizations', {
       method: 'POST',
       body: { name },
-      headers: { 'Idempotency-Key': idempotencyKey },
+      headers: idempotencyHeaders(idempotencyKey),
     }),
 
   get: (organizationId) => requestJson<OrganizationDetails>(organizationPath(organizationId)),
@@ -119,8 +119,12 @@ export function organizationRoomBookingApi(organizationId: string): RoomBookingA
         query: { startUtc: query.startUtc, endUtc: query.endUtc, minCapacity: query.minCapacity },
       }).then((rooms) => rooms.map(toMeetingRoom)),
 
-    createBooking: (request: SaveBookingRequest) =>
-      requestJson<OrganizationBooking>(path('/bookings'), { method: 'POST', body: request }) as Promise<BookingResponse>,
+    createBooking: (request: SaveBookingRequest, options) =>
+      requestJson<OrganizationBooking>(path('/bookings'), {
+        method: 'POST',
+        body: request,
+        headers: idempotencyHeaders(options?.idempotencyKey),
+      }) as Promise<BookingResponse>,
 
     listBookings: (fromUtc: string) => requestJson<OrganizationBooking[]>(path('/bookings'), { query: { fromUtc } }),
 
