@@ -240,6 +240,7 @@ addresses are in [local-development.md](docs/local-development.md).
 | [Local and hosted API](docs/api-targets.md) | Switching a development build between a local and an HTTPS-hosted API |
 | [Backend integration](docs/backend-integration.md) | Running against the API in a browser; integration results from 19 October 2026 |
 | [Dependency advisories](docs/security-advisories.md) | The current `npm audit` findings and why they do not reach the app bundle |
+| [Release readiness](docs/release-readiness.md) | What an Android release still needs: build profiles, signing, HTTPS API, Entra, open device checks |
 
 The backend is documented in its own repository: [README](https://github.com/kris7011/meeting-room-booking)
 and [walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/docs/PROJECT_WALKTHROUGH.md).

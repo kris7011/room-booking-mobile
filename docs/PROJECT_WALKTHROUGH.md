@@ -340,6 +340,10 @@ new sign-in after sign-out; signed-in requests to the local API over
   no release package ID, no release redirect URI registration, and no store
   configuration. A release build would send tokens over HTTPS only, so it
   cannot use a local HTTP API.
+- **Release readiness:** what a first Android release still needs (build
+  profiles, signing, the HTTPS API, the Entra release redirect URI, open
+  device checks) is tracked in [release-readiness.md](release-readiness.md).
+  Assessment on 28 October 2026: not release-ready.
 
 ## 10. Design decisions
 
