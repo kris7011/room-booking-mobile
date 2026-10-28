@@ -1,6 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import type { ServerIdentity } from '../api/current-user';
+import { sessionWarningToShow, type ServerIdentity } from '../api/current-user';
 import type { RegisteredUser } from '../models/current-user';
 import { describeUnavailable } from '../auth/auth-availability';
 import { useAuth } from '../auth/AuthProvider';
@@ -34,6 +34,7 @@ export function AccountPanel() {
   }
 
   if (state.status === 'signed-in') {
+    const warning = sessionWarningToShow(state.warning, identity);
     return (
       <View style={styles.panel} testID="account-panel">
         <Text style={styles.label}>
@@ -44,9 +45,9 @@ export function AccountPanel() {
         <Text style={styles.name}>{state.user.name}</Text>
         {state.user.username ? <Text style={styles.caption}>{state.user.username}</Text> : null}
         <ServerIdentityLine identity={identity} onRetry={recheck} />
-        {state.warning ? (
+        {warning ? (
           <Text style={[styles.caption, styles.warning]} accessibilityLiveRegion="polite">
-            {state.warning}
+            {warning}
           </Text>
         ) : null}
         <PrimaryButton label="Log ud" onPress={signOut} variant="secondary" />

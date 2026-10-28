@@ -1,7 +1,7 @@
 import { TEST_API_URL } from '../support/live-mode';
 
 import assert from 'node:assert/strict';
-import { describe, test } from 'node:test';
+import { afterEach, describe, test } from 'node:test';
 
 import { describeError, isStartNotInFutureError } from '../../src/api/error-messages';
 import { ApiError } from '../../src/api/http-client';
@@ -12,11 +12,33 @@ describe('describeError', () => {
     assert.equal(describeError('boom'), 'Der opstod en uventet fejl. Prøv igen.');
   });
 
-  test('network errors name the API address and the usual causes', () => {
-    const message = describeError(new ApiError('network', 'fetch failed'));
-    assert.ok(message.includes(TEST_API_URL));
-    assert.match(message, /backend kører/);
-    assert.match(message, /CORS/);
+  describe('network errors', () => {
+    // Metro inlines process.env.EXPO_OS with the platform it bundles for.
+    const bundledFor = process.env.EXPO_OS;
+    afterEach(() => {
+      if (bundledFor === undefined) delete process.env.EXPO_OS;
+      else process.env.EXPO_OS = bundledFor;
+    });
+
+    test('in the web build: the API address, the usual causes and CORS', () => {
+      process.env.EXPO_OS = 'web';
+      assert.equal(
+        describeError(new ApiError('network', 'fetch failed')),
+        `Kunne ikke få forbindelse til API'et (${TEST_API_URL}). ` +
+          "Tjek at backend kører, at adressen passer til din enhed, og at API'et tillader CORS fra denne side.",
+      );
+    });
+
+    for (const platform of ['android', 'ios']) {
+      test(`on ${platform}: no CORS hint, which only applies to a browser`, () => {
+        // Phase 5E: the Samsung showed "og – på web – at API'et tillader CORS".
+        process.env.EXPO_OS = platform;
+        assert.equal(
+          describeError(new ApiError('network', 'fetch failed')),
+          `Kunne ikke få forbindelse til API'et (${TEST_API_URL}). Tjek at backend kører, og at adressen passer til din enhed.`,
+        );
+      });
+    }
   });
 
   test('timeout', () => {
