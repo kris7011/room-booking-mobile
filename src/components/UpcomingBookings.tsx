@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import type { RoomBookingApi } from '../api/room-booking-api';
+import { bookingListText } from '../bookings/booking-display';
 import type { LoadState } from '../models/load-state';
 import type { OrganizationBooking } from '../models/organization';
 import { describeOrganizationError } from '../organizations/organization-messages';
@@ -19,6 +20,8 @@ interface UpcomingBookingsProps {
 /**
  * The organisation's bookings that have not ended. Delete is offered only
  * where the API says the user may (canModify); the API checks it again.
+ * Other people's bookings reach a Member without title and booked-by, and
+ * are shown as "Optaget" with their room and time.
  */
 export function UpcomingBookings({ api, now, version }: UpcomingBookingsProps) {
   const [state, setState] = useState<LoadState<OrganizationBooking[]>>({ status: 'idle' });
@@ -49,7 +52,7 @@ export function UpcomingBookings({ api, now, version }: UpcomingBookingsProps) {
     setMessage(null);
     try {
       await api.deleteBooking(booking.id);
-      setMessage({ kind: 'success', text: `Bookingen "${booking.title}" er slettet.` });
+      setMessage({ kind: 'success', text: `Bookingen "${bookingListText(booking).heading}" er slettet.` });
       await load();
     } catch (error) {
       setMessage({ kind: 'error', text: describeOrganizationError(error) });
@@ -72,11 +75,13 @@ export function UpcomingBookings({ api, now, version }: UpcomingBookingsProps) {
       ) : state.data.length === 0 ? (
         <Text style={uiStyles.caption}>Der er ingen kommende bookinger.</Text>
       ) : (
-        state.data.map((booking) => (
+        state.data.map((booking) => {
+          const text = bookingListText(booking);
+          return (
           <View key={booking.id} style={uiStyles.listItem}>
             <View style={uiStyles.between}>
               <Text style={[uiStyles.strong, uiStyles.flex]} numberOfLines={1}>
-                {booking.title}
+                {text.heading}
               </Text>
               {booking.canModify && api.deleteBooking ? (
                 <ConfirmAction
@@ -90,12 +95,10 @@ export function UpcomingBookings({ api, now, version }: UpcomingBookingsProps) {
             <Text style={uiStyles.caption}>
               {booking.roomName} · {formatRange(new Date(booking.startUtc), new Date(booking.endUtc))}
             </Text>
-            <Text style={uiStyles.caption}>
-              Booket af {booking.bookedBy}
-              {booking.createdByCurrentUser ? ' (dig)' : ''}
-            </Text>
+            {text.bookedBy ? <Text style={uiStyles.caption}>{text.bookedBy}</Text> : null}
           </View>
-        ))
+          );
+        })
       )}
     </Card>
   );

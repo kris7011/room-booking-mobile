@@ -34,13 +34,19 @@ export interface SaveRoomRequest {
   capacity: number;
 }
 
-/** A booking as the organisation endpoints return it. */
+/**
+ * A booking as the organisation endpoints return it. A Member gets other
+ * people's bookings without title and booked-by (backend ADR 0006): the
+ * room and time say that the room is taken, nothing more.
+ */
 export interface OrganizationBooking {
   id: number;
   roomId: number;
   roomName: string;
-  title: string;
-  bookedBy: string;
+  /** Null when `detailsHidden`. */
+  title: string | null;
+  /** Null when `detailsHidden`. */
+  bookedBy: string | null;
   startUtc: string;
   endUtc: string;
   createdUtc: string;
@@ -48,6 +54,8 @@ export interface OrganizationBooking {
   createdByCurrentUser: boolean;
   /** The user may change and delete it. The API checks every change itself. */
   canModify: boolean;
+  /** Someone else's booking, seen by a Member. Missing from an API older than ADR 0006. */
+  detailsHidden?: boolean;
 }
 
 /** GET /api/organizations/{id}/members. */

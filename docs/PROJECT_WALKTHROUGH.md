@@ -300,6 +300,11 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
   only ever describe the organisation it was asked for.
 - What the UI shows or hides (`canAdminister`, `canModify` from the API) is a
   **convenience only**. The API enforces every rule itself.
+- **Private booking details [Tested]**: the API sends a Member other
+  people's bookings without title and booked-by (`detailsHidden`, backend
+  ADR 0006), so the data never reaches the phone. `bookingListText`
+  ([`booking-display.ts`](../src/bookings/booking-display.ts)) shows them in
+  *Kommende bookinger* as *Optaget* with room and time.
 - **The only Owner** (`memberActions`, `isSoleOwner` in `permissions.ts`): in a
   loaded member list, the Owner who is the only one is offered neither role
   chips for themselves nor *Forlad organisationen*, but a Danish explanation
