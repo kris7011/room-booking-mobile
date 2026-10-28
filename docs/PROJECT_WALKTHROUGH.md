@@ -56,7 +56,8 @@ src/
   auth/                    Microsoft sign-in: AuthController, token client, ID token, SecureStore session
   api/                     http-client.ts (fetch, tokens, errors), live/demo/organisation API clients
   organizations/           OrganizationController, SessionProvider, permissions, invitation links
-  bookings/                booking-submission.ts: Idempotency-Key per booking, safe retry after a lost answer
+  bookings/                booking-submission.ts: Idempotency-Key per booking, safe retry after a lost answer;
+                           booking-area-choice.ts: which booking area (and API) the home screen shows
   screens/                 AppScreens (booking ↔ administration), HomeScreen, OrganizationAdminScreen
   components/              Presentational components; admin/ and organizations/ sub-folders
   models/                  TypeScript types mirroring the API contracts
@@ -265,6 +266,20 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 - `HomeScreen` renders `BookingArea` with `key={active.publicId}`. Changing
   the key makes React discard the component and its state, so switching
   organisations always starts with an empty search, form and list.
+- **Which booking area [Tested, In review]**: `chooseBookingArea` in
+  [`booking-area-choice.ts`](../src/bookings/booking-area-choice.ts) decides
+  it, and `HomeScreen` only renders the choice. A booking area loads the room
+  overview as soon as it is mounted, so the rule also decides the first
+  request. Demo mode: demo data. While a stored session is being restored:
+  none, so no token-less `GET /api/rooms` (answered `401`) leaves the app at
+  a cold start. Signed out or without sign-in: the original endpoints. A
+  registered user: the active organisation. An API without organisations
+  (`unsupported`, `not-configured`, `registration-unsupported`) or one the
+  token is not sent to (`insecure-transport`): the original endpoints.
+  Otherwise (still checking, or `/api/me` refused the user or failed):
+  none; the account panel says why and offers *Prøv igen*. The original
+  endpoints serve only the legacy organisation, so they would repeat the
+  refusal or put the user there without their choosing it.
 - Every request names its organisation in the URL, so a late response can
   only ever describe the organisation it was asked for.
 - What the UI shows or hides (`canAdminister`, `canModify` from the API) is a

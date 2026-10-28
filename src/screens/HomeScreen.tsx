@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { roomBookingApi, roomBookingApiFor } from '../api/room-booking-api';
 import { useAuth } from '../auth/AuthProvider';
+import { chooseBookingArea } from '../bookings/booking-area-choice';
 import { AccountPanel } from '../components/AccountPanel';
 import { ApiModeBanner } from '../components/ApiModeBanner';
 import { BookingArea } from '../components/BookingArea';
@@ -22,27 +23,22 @@ export function HomeScreen({ onOpenAdmin }: { onOpenAdmin: () => void }) {
   // the organisation changes.
   const organizationApi = useMemo(() => (activeId ? roomBookingApiFor(activeId) : null), [activeId]);
 
+  // Which area, and so which API, is decided in chooseBookingArea.
+  const choice = chooseBookingArea({ demo: isDemoMode, auth: state.status, identity, active });
   let booking: ReactNode = null;
-  if (isDemoMode || state.status !== 'signed-in') {
-    // Demo data, or the original endpoints without a token. A real API
-    // answers 401 there unless it runs in its anonymous demo mode.
+  if (choice.kind === 'original-endpoints') {
     booking = <BookingArea key="no-organization" api={roomBookingApi} />;
-  } else if (identity?.status === 'registered') {
+  } else if (choice.kind === 'organization' && organizationApi) {
     // Keyed by the organisation: switching starts the search, results and
     // forms afresh, so nothing of the previous organisation stays visible.
-    if (active && organizationApi) {
-      booking = (
-        <BookingArea
-          key={active.publicId}
-          api={organizationApi}
-          roomsTitle={`Mødelokaler i ${active.name}`}
-          role={active.role}
-        />
-      );
-    }
-  } else if (identity && identity.status !== 'checking' && identity.status !== 'registering') {
-    // An API without registration or organisations: the original endpoints.
-    booking = <BookingArea key="no-organization" api={roomBookingApi} />;
+    booking = (
+      <BookingArea
+        key={choice.organization.publicId}
+        api={organizationApi}
+        roomsTitle={`Mødelokaler i ${choice.organization.name}`}
+        role={choice.organization.role}
+      />
+    );
   }
 
   return (
