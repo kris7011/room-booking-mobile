@@ -96,7 +96,7 @@ export const demoApi: RoomBookingApi = {
       });
     }
 
-    const booking: OrganizationBooking = {
+    const booking = {
       id: nextDemoBookingId++,
       roomId: room.id,
       roomName: room.name,
@@ -107,7 +107,8 @@ export const demoApi: RoomBookingApi = {
       createdUtc: new Date().toISOString(),
       createdByCurrentUser: true,
       canModify: true,
-    };
+      detailsHidden: false,
+    } satisfies OrganizationBooking;
     demoBookings.push({ roomId: room.id, start, end, booking });
     return booking;
   },
