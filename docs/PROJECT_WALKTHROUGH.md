@@ -170,7 +170,7 @@ Code: [`http-client.ts`](../src/api/http-client.ts).
   only shown for codes the app does not know. Codes that only the
   administration screens meet are in `organizations/organization-messages.ts`,
   which falls back to `error-messages.ts`.
-- **Platform-specific and single messages [Tested, In review]**: a `network`
+- **Platform-specific and single messages [Tested]**: a `network`
   error mentions CORS only in the web build, because only a browser blocks
   a response by CORS. `describeError` reads `process.env.EXPO_OS`, which Metro
   inlines with the platform it bundles for, so the Android bundle does not
@@ -269,7 +269,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
   onboarding) with a Danish notice; a changed role is applied with a notice,
   and the administration page and the upcoming bookings load again for it
   (keyed by role) while the search and draft stay. A disabled or unregistered
-  account clears the list, and **[Tested, In review]** also makes
+  account clears the list, and **[Tested]** also makes
   `useServerIdentity` ask `/api/me` again (`shouldRecheckIdentity` in
   `current-user.ts`, codes in `ACCOUNT_REFUSED_CODES`), so the account panel
   shows the API's refusal instead of a stale *✓ Registreret*. Only a
@@ -282,7 +282,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 - `HomeScreen` renders `BookingArea` with `key={active.publicId}`. Changing
   the key makes React discard the component and its state, so switching
   organisations always starts with an empty search, form and list.
-- **Which booking area [Tested, In review]**: `chooseBookingArea` in
+- **Which booking area [Tested]**: `chooseBookingArea` in
   [`booking-area-choice.ts`](../src/bookings/booking-area-choice.ts) decides
   it, and `HomeScreen` only renders the choice. A booking area loads the room
   overview as soon as it is mounted, so the rule also decides the first
@@ -317,13 +317,13 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 
 | Layer | What | Status |
 | --- | --- | --- |
-| Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors, access-changed signal), API clients against a mocked `fetch` that copies the backend contract, organisation controller (incl. access synchronisation) and rules, booking submission and retries, date/time and search logic, plus Git ignore-behaviour tests | 458 tests passed on 2026-10-28, locally, on a merge of the three Phase 5F fix branches with `main` (447, 444 and 445 with each alone; 439 on `main` `9660987`). Before that: 439 tests passed on 2026-10-27 with Phase 5D PRs B and C combined, locally on PR #27 after merging `main` with PR #26 (407 with B alone, 397 with C alone; 365 on `main` `7db55b7` before them) |
-| Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-27 (PR #27 after merging `main`) |
-| Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-27 (PR #27 after merging `main`); in Phase 5B (2026-10-26) a deliberate unused variable made it exit 1 |
-| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 37 tests passed on 2026-10-27 locally on PR #27 after merging `main`, against backend `main` `91349f0` (PR #18 merged; `E2E_BACKEND_DIR`, temporary SQLite file); 34 before PR #26 added `booking-retry.spec.ts` |
-| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 19/20 on 2026-10-28, on `main` too: Expo published new SDK 58 patch versions of `expo`, `expo-auth-session`, `expo-dev-client` and `expo-web-browser`, aligned in PR #29. Before that, 20/20 on 2026-10-27 (PR #27 after merging `main`; one earlier local run that day failed three checks, including an icon-package conflict with no icon package installed, and the next three runs passed unchanged); first 20/20 on 2026-10-24 after `e104927` (merged PR #11) |
+| Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors, access-changed signal), API clients against a mocked `fetch` that copies the backend contract, organisation controller (incl. access synchronisation) and rules, booking submission and retries, date/time and search logic, plus Git ignore-behaviour tests | 458 tests passed on 2026-10-28 in CI and locally on PR #32's final head `e380cd4` (its tree is `main` after the Phase 5F merges); 447 after #30 and 452 after #31 on the way there, 439 on `main` before them ([merge record](release-readiness.md#6-phase-5f-merge-and-verification)). Earlier that day, 458 on a local merge of the three fix branches (447, 444 and 445 with each alone). Before that: 439 tests passed on 2026-10-27 with Phase 5D PRs B and C combined, locally on PR #27 after merging `main` with PR #26 (407 with B alone, 397 with C alone; 365 on `main` `7db55b7` before them) |
+| Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32) |
+| Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32); in Phase 5B (2026-10-26) a deliberate unused variable made it exit 1 |
+| E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 37 tests passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32), against backend `main` `91349f0`. Earlier: 37 on 2026-10-27 locally on PR #27 after merging `main`, against backend `main` `91349f0` (PR #18 merged; `E2E_BACKEND_DIR`, temporary SQLite file); 34 before PR #26 added `booking-retry.spec.ts` |
+| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-28 after PR #29 was merged, in CI and locally on every later Phase 5F PR. Earlier that day 19/20, on `main` too: Expo had published new SDK 58 patch versions of `expo`, `expo-auth-session`, `expo-dev-client` and `expo-web-browser`, which PR #29 aligned. Before that, 20/20 on 2026-10-27 (PR #27 after merging `main`; one earlier local run that day failed three checks, including an icon-package conflict with no icon package installed, and the next three runs passed unchanged); first 20/20 on 2026-10-24 after `e104927` (merged PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
-| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). On 27 October, on an isolated database copy (logged): the sole-Owner member list of PR #22 (S1, S3, S5, S6), booking retries and organisation access refresh (D1–D8), an offline start, and a cold start after more than a day without a browser login ([Phase 5E run](device-testing.md#phase-5e-run-27-october-2026)). Not run: work or school account, a new user's first sign-in, Admin/Member views, TalkBack (S4), cancelled sign-in, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
+| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). On 27 October, on an isolated database copy (logged): the sole-Owner member list of PR #22 (S1, S3, S5, S6), booking retries and organisation access refresh (D1–D8), an offline start, and a cold start after more than a day without a browser login ([Phase 5E run](device-testing.md#phase-5e-run-27-october-2026)). Not run: a rebuild with the SDK 58 patches of PR #29 and the Phase 5F checks F1–F4 ([procedure](device-testing.md#phase-5f-manual-checks-for-the-owner)), work or school account, a new user's first sign-in, Admin/Member views, TalkBack (S4), cancelled sign-in, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
 
 **Not covered by automated tests:** React Native components on Android/iOS
 (there are no component tests; components are exercised only through the web
@@ -367,6 +367,10 @@ new sign-in after sign-out; signed-in requests to the local API over
 - **Development build:** `npx expo run:android` produces
   `io.github.kris7011.roombooking.dev`. **[Manual]**, built and installed on a
   Samsung SM-A057G (PR #6), and rebuilt after `e104927` on 26 October 2026.
+  The SDK 58 patch update merged on 28 October (PR #29) changes native
+  modules, so the build has to be made again before the next device checks;
+  that rebuild has not been done
+  ([procedure](device-testing.md#rebuilding-the-development-build)).
 - **Release/production builds: [Not implemented].** There is no `eas.json`,
   no release package ID, no release redirect URI registration, and no store
   configuration. A release build would send tokens over HTTPS only, so it
