@@ -31,7 +31,7 @@ const SessionContext = createContext<Session | null>(null);
  */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { state } = useAuth();
-  const { identity, recheck } = useServerIdentity(state.status === 'signed-in' ? state.user : null);
+  const { identity, recheck, accessChanged } = useServerIdentity(state.status === 'signed-in' ? state.user : null);
   const [controller] = useState(
     () => new OrganizationController({ api: liveOrganizationsApi, store: selectionStore, describe: describeError }),
   );
@@ -57,9 +57,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Memberships can change on another device. The list is brought up to date
   // when the app returns to the foreground and when an API answer says the
   // access changed (removed, demoted, disabled); switching organisation and
-  // "Prøv igen" sync in the controller. No polling timer.
+  // "Prøv igen" sync in the controller. No polling timer. An answer that
+  // refuses the account itself also checks /api/me again, so the account
+  // panel stops saying "Registreret".
   useEffect(() => {
-    setAccessChangedListener(() => void controller.sync('access-changed'));
+    setAccessChangedListener((code) => {
+      void controller.sync('access-changed');
+      accessChanged(code);
+    });
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') void controller.sync('foreground');
     });
@@ -68,7 +73,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // React Native Web returns nothing where the browser has no Page Visibility API.
       subscription?.remove();
     };
-  }, [controller]);
+  }, [controller, accessChanged]);
 
   return (
     <SessionContext.Provider

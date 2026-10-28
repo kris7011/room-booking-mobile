@@ -259,7 +259,13 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
   onboarding) with a Danish notice; a changed role is applied with a notice,
   and the administration page and the upcoming bookings load again for it
   (keyed by role) while the search and draft stay. A disabled or unregistered
-  account clears the list. Offline or a server error keeps the list but says it
+  account clears the list, and **[Tested, In review]** also makes
+  `useServerIdentity` ask `/api/me` again (`shouldRecheckIdentity` in
+  `current-user.ts`, codes in `ACCOUNT_REFUSED_CODES`), so the account panel
+  shows the API's refusal instead of a stale *✓ Registreret*. Only a
+  registered identity is checked again: `/api/me` answers a disabled account
+  with the same `403 user_disabled`, and that answer must not start another
+  check. Offline or a server error keeps the list but says it
   may be out of date ("Serveren afgør stadig, hvad du må"). The local role is
   never an authority: the API checks every request. The `AppState` and
   listener wiring in `SessionProvider` is not covered by an automated test.

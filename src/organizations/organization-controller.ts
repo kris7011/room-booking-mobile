@@ -12,7 +12,7 @@
 //
 // No React and no Expo imports: the API and the storage are passed in, so
 // the whole flow runs in the Node tests.
-import { ApiError } from '../api/http-client';
+import { ACCOUNT_REFUSED_CODES, ApiError } from '../api/http-client';
 import type { OrganizationsApi } from '../api/organizations-api';
 import type { KeyValueStore } from '../auth/session-storage';
 import type { MembershipRole, Organization } from '../models/organization';
@@ -87,7 +87,7 @@ function isAccountDenied(error: unknown): boolean {
     error instanceof ApiError &&
     error.kind === 'http' &&
     error.status === 403 &&
-    (error.problem?.code === 'user_disabled' || error.problem?.code === 'user_not_registered')
+    ACCOUNT_REFUSED_CODES.has(error.problem?.code ?? '')
   );
 }
 
