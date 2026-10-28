@@ -401,10 +401,13 @@ Prerequisites: the Android toolchain from
 Android SDK with platform-tools, `JAVA_HOME` and `ANDROID_HOME`), the phone on
 USB with USB debugging on, and `.env.local` with
 `EXPO_PUBLIC_API_URL=http://localhost:5003` and the two `EXPO_PUBLIC_ENTRA_*`
-values. In a clean checkout of `main`:
+values (copy `.env.local`; it is not in Git). Build in a new, clean
+worktree of `main` rather than a checkout with uncommitted work, and use a
+short path such as `C:\rbf` (the 28 October build did both):
 
 ```powershell
-git switch main; git pull --ff-only
+git fetch origin
+git worktree add --detach C:\rbf origin/main; cd C:\rbf
 npm ci
 npx expo-doctor              # expect 20/20
 adb devices                  # the Samsung is listed as "device"
@@ -414,15 +417,23 @@ npm run android:dev-build    # npx expo run:android: regenerates android/, build
 
 After the install, check that Metro logs
 `[auth] Redirect URI: roombookingdev://auth` and that a stored session is
-restored (sign-in step 5); if the session is gone, sign in again. The update
-changes `expo-auth-session` and `expo-web-browser`, so do sign-in step 9
-(**Log ud**, then **Log ind med Microsoft**) on the new build with `logcat`
-running; that step is still open anyway.
+restored (sign-in step 5); if the session is gone, sign in again. Sign-in
+step 9 (**Log ud**, then **Log ind med Microsoft**) passed on the build
+rebuilt on 28 October ([details](#sign-in-on-the-rebuilt-build-28-october)).
+Repeat it, with `logcat` running, whenever a later rebuild changes the native
+sign-in modules (`expo-auth-session`, `expo-web-browser`, `expo-secure-store`
+or `expo-crypto`) or the redirect configuration (`scheme`, the Entra
+redirect URI): the 28 October result covers only the build it was run on.
 
 `expo run:android` (like `expo prebuild`) also rewrites two scripts in
 `package.json`: `android` and `ios` become `expo run:android` and
 `expo run:ios`. That edit is a side effect of the build, not a change to
-commit; `git checkout -- package.json` undoes it.
+commit. Build in a separate, disposable worktree so it cannot mix with
+uncommitted work. There, check `git status` and `git diff package.json`
+first: if the only change is the two rewritten scripts,
+`git checkout -- package.json` reverts them. Do not run it in a checkout that had its own
+uncommitted `package.json` changes before the build, because it would discard
+them too; leave such a checkout as it is.
 
 ### Rebuild, 28 October 2026
 
@@ -438,9 +449,13 @@ commit; `git checkout -- package.json` undoes it.
 
 Building and installing were split, instead of the single
 `npm run android:dev-build`, so that the signing certificate could be
-compared before anything was installed: with a different certificate,
-`adb install -r` fails and the only way forward would be an uninstall, which
-deletes the app's data and SecureStore. (Expo CLI also installs with
+compared before anything was installed. Android installs an update only when
+the new APK is signed by a compatible signer, so with a different
+certificate `adb install -r` fails. If that happens, build and sign again
+with the original key (here, the debug keystore the installed build was made
+with) when it is available. If it is not, stop and report the blocker: an
+uninstall would delete the app's data and SecureStore, so it is not a step to
+take as part of a verification. (Expo CLI also installs with
 `adb install -r -d` and does not uninstall a development build by itself.)
 
 ### Phase 5F: F1–F4
