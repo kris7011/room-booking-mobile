@@ -45,6 +45,7 @@ Each result says where it comes from:
 | [Phase 5D checks](#phase-5d-manual-checks-for-the-owner) D1–D8: booking retry after a lost connection, organisation access refresh, revoked and disabled access | **Passed**, 27 October, on an isolated database copy | logged |
 | [Phase 5F checks](#phase-5f-manual-checks-for-the-owner) F1–F4: no request while restoring, disabled account shown as such, no CORS hint on Android, offline message once | **Passed**, 28 October, on the rebuilt build and an isolated database copy ([results](#phase-5f-f1f4)) | logged |
 | [Day strip](#day-strip-smoke-test-pr-36-28-october-2026) (PR #36, issue #34): initial day visible, a partly hidden day revealed when tapped (both edges), no jump back to an older selection, search uses the chosen day | **Passed**, 28 October, JavaScript from `1c99a25` on the rebuilt build, isolated database copy (read only). A smoke test, not proof that the web race exists on Android | logged |
+| [Booking privacy](#booking-privacy-pr-37-28-october-2026) (PR #37, backend #19): another person's booking as *Optaget* for a Member, own booking in full, booking as a Member | **Passed**, 28 October, JavaScript from `4249d4c` on the `ccc8204` build, isolated database copy with a synthetic test organisation | logged |
 | Signed-in requests to a `127.0.0.1`-only API through `adb reverse tcp:5003 tcp:5003` | **Passed**, 26 October | logged (API log) |
 | Work or school account sign-in | **Not run**: no such account available | – |
 | First sign-in of a new, unregistered account | **Not run**: needs a second account | – |
@@ -566,6 +567,34 @@ race exists or is absent on native platforms.
 Afterwards: `adb reverse tcp:5003 tcp:5003` again, the 8081 forward removed,
 the app force-stopped (its data and session kept), the 5013 API and Metro
 stopped.
+
+## Booking privacy (PR #37), 28 October 2026
+
+Backend PR #19 (ADR 0006) stops sending a Member the title and booked-by of
+other people's bookings; PR #37 shows such a booking as *Optaget*. Logged
+over `adb` on the Samsung SM-A057G:
+
+- **Build.** The installed development build from `ccc8204`, not rebuilt (no
+  `package.json`, lockfile, `app.json`, `metro.config.js` or `index.ts` change
+  since); JavaScript of PR #37's head `4249d4c` from Metro over `adb reverse`.
+- **API and data.** Backend PR #19 (`efc2614`) with `Start-Local.ps1 -Port 5013`
+  on an isolated copy: a verified `Backup-Local.ps1` snapshot of the
+  development database, restored to a new file. In the copy only, a synthetic
+  organisation "Privatlivstest" was added by SQL, owned by a placeholder user
+  who never signs in, with the owner's account as **Member** and one
+  placeholder booking. The real database file was only read by the backup
+  tool; its SHA-256 was the same before and after.
+
+| Step | Expected | Result |
+| --- | --- | --- |
+| Restored session, switch to Privatlivstest | That organisation's rooms and bookings only | Pass (`GET …/rooms`, `…/bookings` 200) |
+| *Kommende bookinger* | Placeholder's booking as *Optaget* with room and time; no "Booket af", no *Slet* | Pass |
+| Search, then book "Eget testmode" as the Member | `201`, "Booking oprettet" | Pass |
+| List after booking | Own booking with title, "Booket af Testperson (dig)" and *Slet*; the other still *Optaget* | Pass ([screenshot](images/android-member-bookings.png)) |
+
+Not tried on the device: the Owner and Admin views of a hidden booking (the
+single account was a Member in this organisation); the API tests
+`BookingPrivacyTests` cover them.
 
 ## Sign-in against a local API over USB
 

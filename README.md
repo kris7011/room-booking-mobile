@@ -9,9 +9,17 @@ ASP.NET Core API. Find a free meeting room for a number of people, a day and
 a time, and book it from an Android phone or a browser. Optional Microsoft
 Entra ID sign-in gives access to organisations and their rooms.
 
-## Screenshots — web demo mode
+## Screenshots
 
-Actual Room Booking UI captured in Chrome's mobile viewport
+**Android development build** on a Samsung SM-A057G, signed in as a Member
+of a test organisation on an isolated database copy (synthetic data; status
+bar cropped). The user's own booking shows its title, *Slet* and "Booket af …
+(dig)"; another person's booking only says *Optaget* with room and time,
+because the API leaves out its details for Members.
+
+<a href="docs/images/android-member-bookings.png"><img src="docs/images/android-member-bookings.png" alt="Android development build: a created booking, and the upcoming bookings with the user's own booking in full and another person's booking shown as Optaget" width="260"></a>
+
+**Expo Web demo mode**: actual Room Booking UI captured in Chrome's mobile viewport
 (390 × 844 CSS pixels, exported as 780 × 1688 PNGs). These are
 **Expo Web demo-mode** captures, not screenshots of the native
 Android build. Data is fictional and no Microsoft account is signed in.
@@ -44,13 +52,19 @@ than mocks alone.
   (Danish) messages for overlapping bookings (409) and validation errors (400).
 - A suggested search time that keeps up with the clock, and a booking whose
   start has passed cannot be confirmed ([time handling](docs/time-handling.md)).
-- Optional Microsoft Entra ID sign-in on Android and iOS for personal and
-  work or school accounts: OAuth 2.0 authorization code flow with PKCE as a
-  public client (no secret), refresh token in SecureStore, silent renewal
-  ([details](docs/entra-login.md)).
+- Optional Microsoft Entra ID sign-in on Android and iOS for personal
+  Microsoft accounts (Outlook.com, Hotmail) and work or school accounts:
+  OAuth 2.0 authorization code flow with PKCE as a public client (no
+  secret), refresh token in SecureStore, silent renewal
+  ([details](docs/entra-login.md)). Room Booking stores no passwords; an
+  e-mail one-time-code sign-in (Entra External ID) was planned but is not
+  implemented.
 - Organisations for signed-in users: choose the active organisation, create
   one, accept invitations; Owners and Admins manage rooms, members and
   invitations ([details](docs/organisations.md)).
+- Private booking details: a Member sees when a room is taken, but not the
+  title or organiser of other people's bookings (*Optaget*); the API removes
+  them before they reach the phone.
 - A clearly labelled demo mode with in-memory data, so the app runs without
   a backend.
 
@@ -63,6 +77,7 @@ The user interface is in Danish; code and documentation are in English.
 | Search and booking without sign-in | Yes | Unit tests; E2E in the web build against the real API | Web: yes. Android: no result recorded |
 | Signed-in search and booking | Yes | Unit tests (API client against a mocked `fetch`) | Samsung, 26 Oct 2026: booking in an organisation, kept after restart (owner report); 27 Oct 2026: bookings on an isolated copy, incl. a retry after a lost connection, each saved once (logged) |
 | Time handling | Yes | Unit tests; E2E with a controlled browser clock | Android checklist not run yet |
+| Private booking details for Members | Yes (API enforces it) | Unit tests; API integration tests in the backend | Samsung, 28 Oct 2026: *Optaget* for another person's booking, own booking in full, on an isolated copy (logged, [record](docs/device-testing.md#booking-privacy-pr-37-28-october-2026)) |
 | Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | Samsung development build, 26 Oct 2026: `/common/` authority and redirect handler configured, personal-account session restored after a restart (logged); sign-out and a new interactive sign-in (owner report). 28 Oct 2026, on the rebuilt build: sign-out and a new sign-in, SecureStore holds only ciphertext and no auth entry after sign-out, no tokens in the recorded logs (logged; account picker by owner report). Work or school account not tried |
 | Organisations and administration | Yes, for signed-in users | Unit tests; role rules enforced and tested in the API | Samsung, 26 Oct 2026: Owner screens and actions (writes on an isolated database copy). Admin and Member views not tried (one account only). 27 Oct 2026: sole-Owner member list (PR #22), booking retry after a lost connection (PR #26) and organisation access refresh (PR #27) on an isolated copy (logged) |
 | Switching between a local and a hosted API | Development builds only ([details](docs/api-targets.md)) | Script smoke test in CI | Windows PowerShell 5.1 on an isolated copy |
@@ -82,7 +97,7 @@ flowchart LR
         web["Expo web build<br/>(no sign-in)"]
     end
     subgraph server["meeting-room-booking repository"]
-        angular["Angular web client<br/>(no sign-in)"]
+        angular["Angular web client<br/>(optional Microsoft sign-in)"]
         api["ASP.NET Core Minimal API<br/>(.NET 10)"]
         db[("SQLite<br/>via EF Core")]
     end
@@ -91,7 +106,7 @@ flowchart LR
     android -- "sign-in: authorization code + PKCE" --> entra
     android -- "REST + bearer token<br/>(HTTPS, or localhost over USB)" --> api
     web -- "REST, anonymous<br/>(API demo mode)" --> api
-    angular -- "REST, anonymous<br/>(API demo mode)" --> api
+    angular -- "REST: bearer token when signed in,<br/>otherwise anonymous demo" --> api
     api -- "validates tokens against<br/>Entra signing keys" --> entra
     api --> db
 ```
@@ -102,7 +117,12 @@ flowchart LR
 - **Signed in**, the app calls `/api/organizations/{id}/…` for the active
   organisation. **Signed out** (and always on web), it calls the original
   `/api/rooms` and `/api/bookings`, which the API only serves anonymously in
-  its Development-only demo mode. Neither web client has sign-in.
+  its Development-only demo mode. This app's web build has no sign-in (a
+  deliberate decision); the Angular client in the backend repository has its
+  own Microsoft sign-in.
+- What each client can do (this app on Android and on the web, the Angular
+  client, the API) is compared in the backend's
+  [capability matrix](https://github.com/kris7011/meeting-room-booking#what-each-client-does).
 
 The code structure, sign-in flow and request handling are explained in the
 [developer walkthrough](docs/PROJECT_WALKTHROUGH.md).
@@ -257,8 +277,9 @@ and [walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/doc
 - **No release builds.** There is no `eas.json`, release package ID, signing
   setup, release redirect URI or store configuration. The API address is
   fixed when the bundle is built; there is no in-app server selection.
-- **No browser sign-in.** Web clients use the API's anonymous,
-  Development-only demo mode.
+- **No sign-in in this app's web build** (by decision). The web build uses the
+  API's anonymous, Development-only demo mode; browser sign-in is the Angular
+  client's job.
 - **No component tests.** Components are
   exercised only through the web build in E2E.
 - **No offline mode**, and sign-in needs internet access to Microsoft even

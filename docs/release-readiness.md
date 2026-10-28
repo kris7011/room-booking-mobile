@@ -96,8 +96,10 @@ The same test had failed the same way earlier that day on a previous #32
 head (`f4e012a`), also passing on a re-run. Every head in the table, and
 `main` after the merge of #33 (`ccc8204`, CI and E2E on push), passed in
 the first attempt. A passing re-run does not explain or fix the intermittent
-failure; it stays open as
-[issue #34](https://github.com/kris7011/room-booking-mobile/issues/34).
+failure; it was tracked as
+[issue #34](https://github.com/kris7011/room-booking-mobile/issues/34), whose
+cause was found, fixed (PR #36) and closed on 28 October with the evidence in
+the [walkthrough](PROJECT_WALKTHROUGH.md#11-known-limitations).
 (The wording first merged with #33, "No re-run was used as evidence", was
 wrong on this point and was corrected here.)
 
