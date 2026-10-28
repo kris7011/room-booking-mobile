@@ -61,10 +61,10 @@ The user interface is in Danish; code and documentation are in English.
 | Area | Implemented | Automated tests | Checked by hand |
 |---|---|---|---|
 | Search and booking without sign-in | Yes | Unit tests; E2E in the web build against the real API | Web: yes. Android: no result recorded |
-| Signed-in search and booking | Yes | Unit tests (API client against a mocked `fetch`) | Samsung, 26 Oct 2026: booking in an organisation, kept after restart (owner report) |
+| Signed-in search and booking | Yes | Unit tests (API client against a mocked `fetch`) | Samsung, 26 Oct 2026: booking in an organisation, kept after restart (owner report); 27 Oct 2026: bookings on an isolated copy, incl. a retry after a lost connection, each saved once (logged) |
 | Time handling | Yes | Unit tests; E2E with a controlled browser clock | Android checklist not run yet |
 | Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | Samsung development build, 26 Oct 2026: `/common/` authority and redirect handler configured, personal-account session restored after a restart (logged); sign-out and a new interactive sign-in (owner report). Work or school account not tried |
-| Organisations and administration | Yes, for signed-in users | Unit tests; role rules enforced and tested in the API | Samsung, 26 Oct 2026: Owner screens and actions (writes on an isolated database copy). Admin and Member views not tried (one account only); the sole-Owner member list (PR #22) not yet checked on the device |
+| Organisations and administration | Yes, for signed-in users | Unit tests; role rules enforced and tested in the API | Samsung, 26 Oct 2026: Owner screens and actions (writes on an isolated database copy). Admin and Member views not tried (one account only). 27 Oct 2026: sole-Owner member list (PR #22), booking retry after a lost connection (PR #26) and organisation access refresh (PR #27) on an isolated copy (logged) |
 | Switching between a local and a hosted API | Development builds only ([details](docs/api-targets.md)) | Script smoke test in CI | Windows PowerShell 5.1 on an isolated copy |
 | Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified; rebuilt after the latest Expo patch update (26 Oct 2026) |
 | iOS | Shared code only | – | Never built |

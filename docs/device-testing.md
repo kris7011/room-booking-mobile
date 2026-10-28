@@ -41,11 +41,12 @@ Each result says where it comes from:
 | Existing memberships (Legacy and Test ApS, role *Ejer*) shown after sign-in | **Passed**, 26 October | owner report; logged |
 | Signed-in booking in Test ApS: search, book, see it in *Kommende bookinger*, still there after restarting the app | **Passed**, 26 October | owner report. The booking was on screen during the checks below (logged, read only) |
 | [Organisation administration as Owner](#organisation-administration-checklist-26-october-2026) | **Passed**, 26 October; Admin, Member and invitee views not run | logged |
-| [Sole-Owner member list](#phase-5c-sole-owner-member-list) (PR #22, issue #20): no role chips or *Forlad organisationen* for the only Owner, and the explanation instead | **Not run** on the device. Unit-tested (`memberActions`, `isSoleOwner`, `describeSoleOwner`) | – |
+| [Sole-Owner member list](#phase-5c-sole-owner-member-list) (PR #22, issue #20): no role chips or *Forlad organisationen* for the only Owner, and the explanation instead | **Passed**, 27 October (S1, S3, S5, S6); S2 not observable; S4 (TalkBack) not run | logged |
+| [Phase 5D checks](#phase-5d-manual-checks-for-the-owner) D1–D8: booking retry after a lost connection, organisation access refresh, revoked and disabled access | **Passed**, 27 October, on an isolated database copy | logged |
 | Signed-in requests to a `127.0.0.1`-only API through `adb reverse tcp:5003 tcp:5003` | **Passed**, 26 October | logged (API log) |
 | Work or school account sign-in | **Not run**: no such account available | – |
 | First sign-in of a new, unregistered account | **Not run**: needs a second account | – |
-| Remaining [sign-in checklist](#sign-in-checklist) steps 2, 3, 6, 7, 8, 10, 11, 12 (consent, cancel, silent renewal after an hour, offline start, revoked session, SecureStore contents, logs free of tokens, Expo Go message) | **Not run** | – |
+| Remaining [sign-in checklist](#sign-in-checklist) steps 2, 3, 8, 10, 11, 12 (consent, cancel, revoked session, SecureStore contents, logs free of tokens, Expo Go message) | **Not run**; steps 6 and 7 passed on 27 October ([details](#phase-5c-sign-in-steps-still-open)) | – |
 | [Invitation link](#invitation-links) opened on the device | **Not run** | – |
 | [Time-handling checklist](#time-handling-checklist) | **Not run** | PR #4, PR #5 |
 | Hosted HTTPS API with sign-in ([api-targets.md](api-targets.md)) | **Not run** | PR #9 |
@@ -152,12 +153,12 @@ of `describeSoleOwner` in
 
 | # | Step | Expected | Result |
 |---|---|---|---|
-| S1 | Signed in, *Aktiv organisation* Test ApS, tap *Administrer organisation* | The administration page opens; *Medlemmer* lists you with *(dig)* and the role *Ejer* | Not run |
-| S2 | Look at your own row while the list is loading (often too fast to see; then record *not observable*) | No role chips and no *Forlad organisationen* while *Henter medlemmer…* shows | Not run |
-| S3 | Your own row after loading (you are the only member and the only Owner) | No role chips, no *Forlad organisationen*; the text *Du er den eneste ejer og det eneste medlem. Inviter en anden og gør vedkommende til ejer, før du kan ændre din egen rolle eller forlade organisationen.* | Not run |
-| S4 | TalkBack on, move to that text | TalkBack reads the explanation | Not run |
-| S5 | Back to booking, switch to Legacy, open *Administrer organisation* | If you are Legacy's only Owner and it has other members: no chips and no *Forlad organisationen* on your row, the text *Du er den eneste ejer, så du kan ikke ændre din egen rolle…*, and the chips and *Fjern fra organisationen* still offered on the other members' rows (do not tap them). If you are the only member: as S3 | Not run |
-| S6 | Android back button, switch back to Test ApS | The booking page shows Test ApS's rooms and bookings, no Legacy data | Not run |
+| S1 | Signed in, *Aktiv organisation* Test ApS, tap *Administrer organisation* | The administration page opens; *Medlemmer* lists you with *(dig)* and the role *Ejer* | **Passed**, 27 October. Logged |
+| S2 | Look at your own row while the list is loading (often too fast to see; then record *not observable*) | No role chips and no *Forlad organisationen* while *Henter medlemmer…* shows | **Not observable**, 27 October: the list had loaded in the first capture after the tap |
+| S3 | Your own row after loading (you are the only member and the only Owner) | No role chips, no *Forlad organisationen*; the text *Du er den eneste ejer og det eneste medlem. Inviter en anden og gør vedkommende til ejer, før du kan ændre din egen rolle eller forlade organisationen.* | **Passed**, 27 October: the view hierarchy ends with that text, no chip or button after it. Logged |
+| S4 | TalkBack on, move to that text | TalkBack reads the explanation | Not run: needs the owner to listen |
+| S5 | Back to booking, switch to Legacy, open *Administrer organisation* | If you are Legacy's only Owner and it has other members: no chips and no *Forlad organisationen* on your row, the text *Du er den eneste ejer, så du kan ikke ændre din egen rolle…*, and the chips and *Fjern fra organisationen* still offered on the other members' rows (do not tap them). If you are the only member: as S3 | **Passed**, 27 October: you are Legacy's only member, so as S3. Logged |
+| S6 | Android back button, switch back to Test ApS | The booking page shows Test ApS's rooms and bookings, no Legacy data | **Passed**, 27 October: *Mødelokaler i Test ApS* with Testlokale 1 and 2, no Legacy room. Logged |
 
 **Cannot be checked with one account:** a second Owner (each Owner then gets
 chips and *Forlad organisationen* on their own row), and the Admin and Member
@@ -175,8 +176,8 @@ database.
 |---|---|---|
 | 3 | Cancelled login: *Login blev annulleret.*, no error, still signed out | Not run |
 | 9 | Logout, then sign-in again: signed out at once, the account picker appears | Owner report, 26 October (see the table above); no log recorded |
-| 7 | Offline start: flight mode, restart, signed in with *Kunne ikke få forbindelse til Microsoft…*; with the network back, a search works | Not run |
-| 6 | Silent renewal after more than an hour in the background: a search works without a browser login | Not run |
+| 7 | Offline start: flight mode, restart, signed in with *Kunne ikke få forbindelse til Microsoft…*; with the network back, a search works | **Passed**, 27 October: offline the text and *Prøv igen*; with the network back, *Prøv igen*, then `/api/me`, `/api/organizations` and a search answered `200`. Logged. (The account panel shows the text twice.) |
+| 6 | Silent renewal after more than an hour in the background: a search works without a browser login | **Passed, indirectly**, 27 October: a cold start more than a day after the last use (26 October) reached the API (`/api/me` `200`) without a browser login, so the token was renewed silently. Logged; the renewal itself was not logged |
 | 10 | SecureStore holds ciphertext only, and nothing after logout | Not run |
 | 11 | No token, code or code verifier in Metro or `adb logcat` during the steps above | Not run |
 | 8 | Revoked session (*Sign out everywhere* on account.microsoft.com, or a password change), then restart: *Din Microsoft-session er udløbet* | Not run; this signs the account out on every device |
@@ -241,8 +242,8 @@ the date and time, whether the app was **Room Booking** or Expo Go, and the
 Written in Phase 5D (27 October 2026) for safe booking retries (mobile
 PR #26, backend PR #18) and organisation access synchronisation (this PR).
 The Phase 5C checks S1–S6 [above](#phase-5c-manual-checks-for-the-owner)
-are separate and still open. Every result below is **Not run** until it has
-been done and recorded with its evidence label (*Owner report* or *Logged*).
+are separate. Each result below carries its evidence label (*Owner report* or
+*Logged*); the [Phase 5E run](#phase-5e-run-27-october-2026) recorded D1–D8.
 Nothing here needs a second Microsoft account.
 
 **Automated already** (no device needed): the backend idempotency rules
@@ -267,13 +268,33 @@ the Android network stack, `AppState` on Android, and how the texts look.
 3. Force-stop and reopen the app so it loads the new bundle.
 4. Keep screenshots and logs to yourself.
 
+### Cutting the connection to the API
+
+**Flight mode does not cut it.** The phone reaches the local API through
+`adb reverse` over the USB cable, and flight mode leaves USB alone: on
+27 October 2026 a search in flight mode still reached the 5013 API (*Logged*).
+Flight mode only cuts the API when the app talks to it over Wi-Fi or mobile
+data, for example a hosted API. Over USB, cut the API route itself:
+
+```powershell
+adb reverse --remove tcp:5003     # the phone's localhost:5003 now refuses connections
+# wait until no connection to the API is left open (Kestrel closes idle
+# keep-alive connections after 130 s; until then the app reuses them):
+Get-NetTCPConnection -LocalPort 5013 -State Established -ErrorAction SilentlyContinue
+# ...test the failure...
+adb reverse tcp:5003 tcp:5013     # the route is back
+```
+
+Removing the rule does not close a connection that is already open, so
+without the wait the next request can still succeed.
+
 ### Phase 5D: booking retries (PR #26)
 
 | # | Step | Expected | Result |
 |---|---|---|---|
-| D1 | Search, open a room, type a title. Turn on flight mode, tap *Bekræft booking* | The warning *Vi ved ikke, om bookingen blev oprettet* with *Prøv igen*; title and name still filled in; **not** *Bookingen blev ikke oprettet* | Not run |
-| D2 | Turn flight mode off, tap *Prøv igen* | *Booking oprettet*; *Kommende bookinger* lists it **once** | Not run |
-| D3 | Repeat D1, then close the form (*Annuller*) and search again | The warning stays above the results with the booking's title and time; *Prøv igen* there gives *Booking oprettet* once | Not run |
+| D1 | Search, open a room, type a title. [Cut the API connection](#cutting-the-connection-to-the-api), tap *Bekræft booking* | The warning *Vi ved ikke, om bookingen blev oprettet* with *Prøv igen*; title and name still filled in; **not** *Bookingen blev ikke oprettet* | **Passed**, 27 October; no request reached the API. Logged |
+| D2 | Restore the API connection, tap *Prøv igen* | *Booking oprettet*; *Kommende bookinger* lists it **once** | **Passed**, 27 October: one `POST` → `201`, one booking and one `BookingCreationRequests` row in the copy. Logged |
+| D3 | Repeat D1, then close the form (*Annuller*), restore the connection and search again | The warning stays above the results with the booking's title and time; *Prøv igen* there gives *Booking oprettet* once | **Passed**, 27 October: the warning named the title and *Ons 28. okt, 15:00–16:00*; one `POST` → `201`, one booking. Logged |
 
 An answer lost *after* the server saved the booking cannot be produced on
 purpose with the phone; it is covered by the backend and web E2E tests.
@@ -306,14 +327,45 @@ WHERE "OrganizationId" = (SELECT "Id" FROM "Organizations" WHERE "Name" = 'Test 
 
 | # | Step | Expected | Result |
 |---|---|---|---|
-| D4 | Test ApS active, *Administrer organisation* open. Run P1 and P2. Press Home, wait at least 30 s, return to the app | The administration page closes; *Din rolle i Test ApS er ændret* / *Du er nu medlem…*; the role badge says *Medlem*; *Administrer organisation* is no longer offered | Not run |
-| D5 | Run P3. Tap *Søg efter ledige lokaler* (no waiting) | The API refuses the search (`404 organization_not_found`, visible in the 5013 API log); the app switches to your other organisation (or onboarding) with *Du har ikke længere adgang til Test ApS* (the search error may flash briefly); no Test ApS rooms or bookings stay on screen | Not run |
-| D6 | Flight mode on, Home, wait 30 s, return | *Kunne ikke opdatere dine organisationer … Serveren afgør stadig, hvad du må.* with *Prøv igen*; the list stays | Not run |
-| D7 | Flight mode off, tap *Prøv igen* | The warning disappears; the list is current | Not run |
-| D8 | Optional, on the copy: `UPDATE "Users" SET "DisabledUtc" = 638100000000000000 WHERE "PublicId" <> '5D5D5D5D-0000-4000-8000-000000000001';` then return to the app after 30 s | *Kunne ikke hente dine organisationer* with the disabled-account text; no organisation usable. Undo with `… SET "DisabledUtc" = NULL …` and *Prøv igen* | Not run |
+| D4 | Test ApS active, *Administrer organisation* open. Run P1 and P2. Press Home, wait at least 30 s, return to the app | The administration page closes; *Din rolle i Test ApS er ændret* / *Du er nu medlem…*; the role badge says *Medlem*; *Administrer organisation* is no longer offered | **Passed**, 27 October. Logged |
+| D5 | Run P3. Tap *Søg efter ledige lokaler* (no waiting) | The API refuses the search (`404 organization_not_found`, visible in the 5013 API log); the app switches to your other organisation (or onboarding) with *Du har ikke længere adgang til Test ApS* (the search error may flash briefly); no Test ApS rooms or bookings stay on screen | **Passed**, 27 October: search `404`, then *Du har ikke længere adgang til Test ApS … Appen viser nu Legacy.* and Legacy's rooms. Logged |
+| D6 | [Cut the API connection](#cutting-the-connection-to-the-api), Home, wait at least 30 s, return | *Kunne ikke opdatere dine organisationer … Serveren afgør stadig, hvad du må.* with *Prøv igen*; the list stays | **Passed**, 27 October. Logged |
+| D7 | Restore the API connection, tap *Prøv igen* | The warning disappears; the list is current | **Passed**, 27 October: one `GET /api/organizations` → `200`. Logged |
+| D8 | Optional, on the copy: `UPDATE "Users" SET "DisabledUtc" = 638100000000000000 WHERE "PublicId" <> '5D5D5D5D-0000-4000-8000-000000000001';` then return to the app after 30 s | *Kunne ikke hente dine organisationer* with the disabled-account text; no organisation usable. Undo with `… SET "DisabledUtc" = NULL …` and *Prøv igen* | **Passed**, 27 October: `403`, *Din Room Booking-konto er deaktiveret.*, no organisation or booking area; after the undo, *Prøv igen* → `200`. Logged |
 
 The 5013 API log shows one `GET /api/organizations` per return to the
-foreground after 30 s, and none within 30 s (*Logged* evidence).
+foreground after 30 s, and none within 30 s (*Logged* evidence). Confirmed
+on 27 October: a return after 10 s sent no request.
+
+### Phase 5E run, 27 October 2026
+
+S1–S6 and D1–D8 above ran on the Samsung SM-A057G, development build of
+26 October, JavaScript from mobile `main` (`9660987`) served by Metro over
+`adb reverse tcp:8081`. No rebuild was needed: since the build's commit
+(`7bf2153`) only dev-only ESLint packages were added, none with native code.
+The steps were driven over `adb` (taps, `uiautomator dump`, screen captures)
+with the owner's existing session; nobody signed in during the run.
+
+- **Database.** A verified `RoomBooking.DatabaseTool` backup of the real
+  development database, restored to a new file. The API from backend `main`
+  (`91349f0`) served that copy on port 5013; on start it took its own
+  pre-migration backup and applied only `AddBookingCreationRequests` (PR #18)
+  to the copy. Every SQL statement ran through a script that refused any file
+  without that migration. The real database was never opened for writing:
+  its SHA-256 and per-table fingerprint were the same before and after.
+- **Isolation.** `adb reverse tcp:5003 tcp:5013`; the copy's API log showed
+  the app's requests (`/api/me`, `/api/organizations`, rooms, bookings) before
+  anything was written.
+- **Observations, not defects of the tested features:**
+  - While the session is restored at a cold start, the app sends one
+    anonymous `GET /api/rooms` (answered `401`) before it knows it is signed
+    in: `HomeScreen` renders the token-less `BookingArea` for every state
+    other than `signed-in`. Nothing was seen on screen.
+  - On Android, the *Kunne ikke opdatere dine organisationer* text includes
+    the web-only hint *og – på web – at API'et tillader CORS fra denne side*.
+  - With the account disabled (D8), the account panel still shows
+    *✓ Registreret i Room Booking*; only the organisation panel reports the
+    disabled account.
 
 ## Sign-in against a local API over USB
 
