@@ -170,6 +170,16 @@ Code: [`http-client.ts`](../src/api/http-client.ts).
   only shown for codes the app does not know. Codes that only the
   administration screens meet are in `organizations/organization-messages.ts`,
   which falls back to `error-messages.ts`.
+- **Platform-specific and single messages [Tested, In review]**: a `network`
+  error mentions CORS only in the web build, because only a browser blocks
+  a response by CORS. `describeError` reads `process.env.EXPO_OS`, which Metro
+  inlines with the platform it bundles for, so the Android bundle does not
+  even contain the web text (checked in exported bundles; the web E2E test
+  checks the hint). In the account panel, `sessionWarningToShow`
+  (`current-user.ts`) hides the session warning when the identity line already
+  shows the same text: after an offline start, the token renewal and the
+  `/api/me` check fail with one error, and the identity line keeps it with
+  *Prøv igen*.
 
 ### Safe booking retries [Tested]
 

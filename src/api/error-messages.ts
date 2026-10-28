@@ -24,11 +24,14 @@ export function describeError(error: unknown): string {
 
   switch (error.kind) {
     case 'network':
-      return (
-        `Kunne ikke få forbindelse til API'et (${apiBaseUrl}). ` +
-        'Tjek at backend kører, at adressen passer til din enhed, ' +
-        'og – på web – at API\'et tillader CORS fra denne side.'
-      );
+      // Only a browser blocks a response by CORS; Android and iOS have no
+      // CORS. EXPO_OS is the platform Metro bundled for, inlined at build time
+      // (https://docs.expo.dev/guides/tree-shaking/); read on every call, so
+      // the Node tests can set it.
+      return process.env.EXPO_OS === 'web'
+        ? `Kunne ikke få forbindelse til API'et (${apiBaseUrl}). ` +
+            "Tjek at backend kører, at adressen passer til din enhed, og at API'et tillader CORS fra denne side."
+        : `Kunne ikke få forbindelse til API'et (${apiBaseUrl}). Tjek at backend kører, og at adressen passer til din enhed.`;
     case 'timeout':
       return `API'et (${apiBaseUrl}) svarede ikke inden for 10 sekunder.`;
     case 'invalid-response':

@@ -166,3 +166,14 @@ export function describeOrganizationAccess(user: RegisteredUser): { title: strin
     detail: user.organizations.map(describeMembership).join('\n'),
   };
 }
+
+/**
+ * The signed-in session's warning (AuthState) for the account panel, or
+ * undefined when the identity line above it already says the same. Offline,
+ * the token renewal and the /api/me check fail with one error, and both
+ * described it; the identity line keeps it, with its "Prøv igen".
+ */
+export function sessionWarningToShow(warning: string | undefined, identity: ServerIdentity | null): string | undefined {
+  const identityMessage = identity !== null && 'message' in identity ? identity.message : undefined;
+  return warning === identityMessage ? undefined : warning;
+}
