@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -41,35 +41,42 @@ export function DaySelector({ value, onChange, today }: DaySelectorProps) {
   const viewport = useRef<Extent>({ start: 0, size: 0 });
   const contentWidth = useRef(0);
 
-  const revealSelected = useCallback(
-    (animated: boolean) => {
-      const chip = chipExtents.current.get(selectedKey);
-      const { start, size } = viewport.current;
-      if (!chip || size === 0) return;
+  // Layout callbacks may run the handler of an earlier render: React Native
+  // Web picks up onLayout when a resize is observed and calls it after
+  // measuring in a later task, so a tap in between leaves the old handler
+  // (issue #34). Reading the selection from a ref makes every callback reveal
+  // the day that is selected now.
+  const selectedKeyRef = useRef(selectedKey);
+  useLayoutEffect(() => {
+    selectedKeyRef.current = selectedKey;
+  }, [selectedKey]);
 
-      const delta = scrollDeltaToReveal({
-        itemStart: chip.start,
-        itemEnd: chip.start + chip.size,
-        visibleStart: start,
-        visibleEnd: start + size,
-        margin: spacing.md,
-      });
-      if (delta === 0) return;
-      const x = clampScrollOffset(start + delta, contentWidth.current, size);
-      viewport.current = { start: x, size };
-      scrollRef.current?.scrollTo({ x, animated });
-    },
-    [selectedKey],
-  );
+  const revealSelected = useCallback((animated: boolean) => {
+    const chip = chipExtents.current.get(selectedKeyRef.current);
+    const { start, size } = viewport.current;
+    if (!chip || size === 0) return;
+
+    const delta = scrollDeltaToReveal({
+      itemStart: chip.start,
+      itemEnd: chip.start + chip.size,
+      visibleStart: start,
+      visibleEnd: start + size,
+      margin: spacing.md,
+    });
+    if (delta === 0) return;
+    const x = clampScrollOffset(start + delta, contentWidth.current, size);
+    viewport.current = { start: x, size };
+    scrollRef.current?.scrollTo({ x, animated });
+  }, []);
 
   // A new selection: scroll it into view.
-  useEffect(() => revealSelected(true), [revealSelected]);
+  useEffect(() => revealSelected(true), [selectedKey, revealSelected]);
 
   const handleChipLayout = (key: number) => (event: LayoutChangeEvent) => {
     const { x, width } = event.nativeEvent.layout;
     chipExtents.current.set(key, { start: x, size: width });
     // First layout of the selected chip, e.g. a default day further ahead.
-    if (key === selectedKey) revealSelected(false);
+    if (key === selectedKeyRef.current) revealSelected(false);
   };
 
   const handleLayout = (event: LayoutChangeEvent) => {

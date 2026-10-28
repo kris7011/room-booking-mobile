@@ -103,6 +103,45 @@ export class HomePage {
     });
   }
 
+  /**
+   * The first day chip that sticks out past the right edge of the strip: its
+   * index, where it starts and its vertical middle, in page pixels.
+   */
+  async dayChipCutOffAtRightEdge(strip: { right: number }): Promise<{ index: number; left: number; centerY: number } | undefined> {
+    for (let index = 0; index < 14; index++) {
+      const box = await this.dayChip(index).boundingBox();
+      if (box && box.x < strip.right && box.x + box.width > strip.right) {
+        return { index, left: box.x, centerY: box.y + box.height / 2 };
+      }
+    }
+    return undefined;
+  }
+
+  /** Whether the day chip lies entirely between the strip's edges. */
+  async isDayChipInsideStrip(index: number, strip: { left: number; right: number }): Promise<boolean> {
+    const box = await this.dayChip(index).boundingBox();
+    return !!box && box.x >= strip.left && box.x + box.width <= strip.right;
+  }
+
+  /**
+   * Resolves once the browser has delivered the ResizeObserver notifications
+   * that were due, which is where React Native Web's onLayout starts. A new
+   * observer is notified after the observers created before it, so its first
+   * notification marks that point.
+   */
+  async layoutObservationsDelivered(): Promise<void> {
+    await this.page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          const observer = new ResizeObserver(() => {
+            observer.disconnect();
+            resolve();
+          });
+          observer.observe(document.body);
+        }),
+    );
+  }
+
   async chooseParticipants(count: number): Promise<void> {
     await this.page.getByRole('button', { name: `${count} deltagere`, exact: true }).click();
   }
