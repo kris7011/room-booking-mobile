@@ -34,14 +34,7 @@ test.describe('Searching for free rooms', () => {
 
   test('scrolls a day that is half hidden at the edge fully into view when chosen', async ({ app, page }) => {
     const strip = await app.dayStripBounds();
-    // The first day chip that sticks out past the right edge of the strip.
-    let partlyHidden: { index: number; left: number; centerY: number } | undefined;
-    for (let index = 0; index < 14 && !partlyHidden; index++) {
-      const box = await app.dayChip(index).boundingBox();
-      if (box && box.x < strip.right && box.x + box.width > strip.right) {
-        partlyHidden = { index, left: box.x, centerY: box.y + box.height / 2 };
-      }
-    }
+    const partlyHidden = await app.dayChipCutOffAtRightEdge(strip);
     expect(partlyHidden, 'expected a day chip cut off by the right edge of the strip').toBeDefined();
     const { index, left, centerY } = partlyHidden!;
 
@@ -50,12 +43,7 @@ test.describe('Searching for free rooms', () => {
     await page.mouse.click((left + strip.right) / 2, centerY);
 
     await expect(app.dayChip(index)).toHaveAttribute('aria-selected', 'true');
-    await expect
-      .poll(async () => {
-        const box = await app.dayChip(index).boundingBox();
-        return !!box && box.x >= strip.left && box.x + box.width <= strip.right;
-      })
-      .toBe(true);
+    await expect.poll(() => app.isDayChipInsideStrip(index, strip)).toBe(true);
 
     // The search uses the chosen day: 4 March + index, 08:00 local (UTC+1).
     const response = await app.search();
@@ -181,5 +169,37 @@ test.describe('Searching for free rooms', () => {
       page.getByText(`Intet lokale med plads til 12 er ledigt ${DEFAULT_SLOT.label}.`, { exact: false }),
     ).toBeVisible();
     await expect(app.resultCards).toHaveCount(0);
+  });
+});
+
+// React Native Web reports onLayout in two steps: a ResizeObserver
+// notification picks up the view's onLayout handler, and a later setTimeout
+// measures the view and calls that handler. A tap between the two used to
+// leave the day strip unscrolled, because the handler came from the render
+// before the tap (issue #34). Pausing the clock holds the second step, so the
+// tap lands in between on every run instead of only on a slow machine.
+test.describe('Choosing a day before the day strip has reported its layout', () => {
+  test.use({ clockMode: 'running' });
+
+  test('still scrolls a half hidden day fully into view', async ({ app, page }) => {
+    await page.clock.pauseAt(new Date('2030-03-04T07:40:01+01:00'));
+    await app.open();
+    await app.layoutObservationsDelivered();
+
+    const strip = await app.dayStripBounds();
+    const partlyHidden = await app.dayChipCutOffAtRightEdge(strip);
+    expect(partlyHidden, 'expected a day chip cut off by the right edge of the strip').toBeDefined();
+    const { index, left, centerY } = partlyHidden!;
+
+    await page.mouse.click((left + strip.right) / 2, centerY);
+    await expect(app.dayChip(index)).toHaveAttribute('aria-selected', 'true');
+
+    // The held measurements arrive after the tap.
+    await page.clock.resume();
+    await expect.poll(() => app.isDayChipInsideStrip(index, strip)).toBe(true);
+
+    const response = await app.search();
+    const day = String(4 + index).padStart(2, '0');
+    expect(new URL(response.url()).searchParams.get('startUtc')).toBe(`2030-03-${day}T07:00:00.000Z`);
   });
 });
