@@ -28,7 +28,7 @@ by its integration tests: see its
 - **Booking**: search, the booking form and *Kommende bookinger* use `/api/organizations/{id}/…` of the active organisation only. Members see *Slet* only on their own bookings (`canModify`); the API checks every change again. Members get other people's bookings without title and booked-by (backend [ADR 0006](https://github.com/kris7011/meeting-room-booking/blob/main/docs/adr/0006-booking-details-hidden-from-members.md)); the list shows them as *Optaget* with room and time (`bookingListText` in `src/bookings/booking-display.ts`, tested). Owners and Admins see every booking in full.
 - **Administrer organisation** (Owners and Admins only): details and counts, renaming (Owners; never the legacy organisation), rooms (create, edit, archive, restore), invitations (invite by e-mail, share the code and link, see and revoke open ones), members (Owners change roles and remove members; anyone can leave). Android's back button returns to booking.
 
-What the app shows is only a convenience: the API enforces every rule itself (see the API's README, [Organisation access control](https://github.com/kris7011/meeting-room-booking#organisation-access-control)).
+What the app shows is only a convenience: the API enforces every rule itself (see the API reference, [Organisation access control](https://github.com/kris7011/meeting-room-booking/blob/main/docs/api-reference.md#organisation-access-control)).
 
 ## Switching without stale data
 

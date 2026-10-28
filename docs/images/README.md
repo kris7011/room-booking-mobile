@@ -1,7 +1,18 @@
 # Screenshots
 
 This folder contains genuine captures of the Room Booking user interface.
-The three current screenshots were **captured directly from Chrome's
+
+`android-member-bookings.png` was captured with `adb exec-out screencap` from
+the **Android development build** on a Samsung SM-A057G on 28 October 2026,
+during the booking-privacy check (PR #37), on an isolated database copy. The
+organisation ("Privatlivstest"), the room, the booking title and "Testperson"
+are test data; the other booking belongs to a synthetic placeholder user.
+The status bar and the navigation bar were cropped; nothing else was changed.
+The floating gear is the development client's menu button. No account name,
+e-mail address, *Bruger-ID*, token or API address other than `localhost` is
+visible.
+
+The three Expo Web screenshots were **captured directly from Chrome's
 mobile viewport** (390 × 844 CSS pixels at device pixel ratio 2,
 producing 780 × 1688 PNG files) and provided by the project owner.
 The browser toolbar and DevTools do not appear in these captures.
@@ -19,6 +30,7 @@ only fictional room data.
 | `search.png` | Search form: participants, day and time | Expo Web, demo mode |
 | `results.png` | Two available demo rooms, including capacity | Expo Web, demo mode |
 | `booking-form.png` | Focus Room booking form, showing passed-start-time validation (not a completed booking) | Expo Web, demo mode |
+| `android-member-bookings.png` | A completed booking and *Kommende bookinger* as a Member: own booking in full, another person's as *Optaget* | Android development build, test organisation on an isolated database copy |
 
 ## Still to capture
 
@@ -26,8 +38,9 @@ only fictional room data.
 |---|---|---|
 | `organisation-panel.png` | Signed-in account and active organisation | Native development build, with a fictional test organisation and test account |
 
-The native Android development build and complete Microsoft sign-in remain
-unverified end to end. Do not imply otherwise when using these images.
+Microsoft sign-in on the Android development build is recorded in
+[device-testing.md](../device-testing.md); the Expo Web images show demo mode
+only and say nothing about sign-in.
 
 The images are captures of distinct UI states, not a single successful
 end-to-end booking. In the results and booking-form captures, the previous
