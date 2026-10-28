@@ -20,7 +20,7 @@ still open.
 | URL scheme for the sign-in redirect | **Decision.** The scheme is `roombookingdev`, and `NATIVE_REDIRECT_URI` in `src/auth/auth-config.ts` is `roombookingdev://auth`. A release with its own scheme needs that constant (and `app.json`) to vary per build, and a matching redirect URI in Entra (section 3) |
 | Version and `versionCode` | **Open.** `app.json` has `version: 1.0.0` and no `android.versionCode`. Decide whether EAS or `app.json` owns the build number |
 | Upload key and signing | **Open.** EAS can hold the upload keystore, or `eas credentials` can download it to a local `credentials.json` ([app credentials](https://docs.expo.dev/app-signing/app-credentials/)). The keystore must never be committed (`.gitignore` has `*.keystore`). Google Play App Signing keeps the app signing key, so a lost upload key can be reset |
-| Expo SDK patch versions | **Open.** On 28 October `npx expo-doctor` fails one check: `expo` 58.0.19 (expects 58.0.20), `expo-auth-session` 58.0.14 (58.0.15), `expo-dev-client` 58.0.15 (58.0.16), `expo-web-browser` 58.0.6 (58.0.7). Align with `npx expo install --fix` in its own PR; it changes native modules, so the Samsung development build must be rebuilt and the sign-in checks repeated |
+| Expo SDK patch versions | **Open.** On 28 October `npx expo-doctor` fails one check: `expo` 58.0.19 (expects 58.0.20), `expo-auth-session` 58.0.14 (58.0.15), `expo-dev-client` 58.0.15 (58.0.16), `expo-web-browser` 58.0.6 (58.0.7). PR #29 aligns them with `npx expo install --fix`, separately from the fixes of this phase; it changes native modules, so the Samsung development build must be rebuilt and the sign-in checks repeated |
 | Development-only code paths | **Done** (tested). `isDevelopmentBundle()` (`src/config/build.ts`) is false in a release bundle, which turns off the HTTP-to-loopback exception for tokens |
 | iOS | **Not started.** Never built, on a simulator or a device |
 
@@ -64,6 +64,7 @@ build unless noted:
 
 | Item | Status |
 |---|---|
-| Mobile repository visibility | **Private** (checked 28 October). Going public is the owner's decision; the 24 October audit found no secrets in history |
+| Mobile repository visibility | **Public**, on purpose: it is a portfolio project that reviewers can inspect. The 24 October audit found no secrets in history, and the Phase 5F commits were scanned with gitleaks before they were pushed (28 October) |
+| Branch protection | **Decision.** `main` has no branch protection or ruleset, so a red check does not block a merge. For a public repository both are available on GitHub Free |
 | Known advisories | `node-forge` and `zod` via `@expo/cli` (development tooling only; [security-advisories.md](security-advisories.md)). Do not run `npm audit fix --force`: it offers an old Expo |
 | CI | Unit tests, type check, ESLint and Expo Doctor on every PR; Playwright E2E of the web build against the real API. Expo Doctor fails on `main` until the patch versions above are aligned |

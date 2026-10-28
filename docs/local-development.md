@@ -75,8 +75,6 @@ Demo mode simulates the API: the same rooms, the same overlap rule, 409 for over
 | `npx expo-doctor` | Check dependency versions and project config against Expo SDK 58 |
 | `npx expo install <package>` | Add a dependency in the version that matches the SDK (use instead of `npm install`) |
 
-There is no ESLint configuration yet, so there is no lint command.
-
 ### Low-memory machines
 
 `metro.config.js` sets `maxWorkers = 1`, so Metro bundles in a single process instead of one worker per CPU core. This is slower but uses much less memory. Override it per run with `npx expo start --max-workers 4`. `npm test` also runs one test file at a time for the same reason, and `npm run test:e2e` uses one browser and runs one test at a time.

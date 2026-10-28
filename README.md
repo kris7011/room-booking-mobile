@@ -66,7 +66,7 @@ The user interface is in Danish; code and documentation are in English.
 | Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | Samsung development build, 26 Oct 2026: `/common/` authority and redirect handler configured, personal-account session restored after a restart (logged); sign-out and a new interactive sign-in (owner report). Work or school account not tried |
 | Organisations and administration | Yes, for signed-in users | Unit tests; role rules enforced and tested in the API | Samsung, 26 Oct 2026: Owner screens and actions (writes on an isolated database copy). Admin and Member views not tried (one account only). 27 Oct 2026: sole-Owner member list (PR #22), booking retry after a lost connection (PR #26) and organisation access refresh (PR #27) on an isolated copy (logged) |
 | Switching between a local and a hosted API | Development builds only ([details](docs/api-targets.md)) | Script smoke test in CI | Windows PowerShell 5.1 on an isolated copy |
-| Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified; rebuilt after the latest Expo patch update (26 Oct 2026) |
+| Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified; rebuilt after the Expo patch update of 26 Oct 2026 (the newer patches in PR #29 need another rebuild) |
 | iOS | Shared code only | – | Never built |
 | Release builds and store distribution | No | – | – |
 
@@ -229,7 +229,7 @@ addresses are in [local-development.md](docs/local-development.md).
 | Document | Contents |
 |---|---|
 | [Developer walkthrough](docs/PROJECT_WALKTHROUGH.md) | Architecture, sign-in, API calls, organisations, testing strategy, design decisions |
-| [Architecture decision records](docs/adr/README.md) | Sign-in and token storage; API selection and token transport |
+| [Architecture decision records](docs/adr/README.md) | Sign-in and token storage; API selection and token transport; safe booking retries; organisation access synchronisation |
 | [Local development](docs/local-development.md) | Demo and live mode, API addresses per device, commands, project structure |
 | [Microsoft Entra sign-in](docs/entra-login.md) | How sign-in works, configuration, Entra app registration, troubleshooting |
 | [Organisations](docs/organisations.md) | Organisation features and how stale data is avoided |
@@ -259,7 +259,7 @@ and [walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/doc
   fixed when the bundle is built; there is no in-app server selection.
 - **No browser sign-in.** Web clients use the API's anonymous,
   Development-only demo mode.
-- **No component tests and no ESLint configuration.** Components are
+- **No component tests.** Components are
   exercised only through the web build in E2E.
 - **No offline mode**, and sign-in needs internet access to Microsoft even
   when the API runs locally.

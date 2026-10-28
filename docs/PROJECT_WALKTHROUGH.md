@@ -247,7 +247,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
   choice per user from SecureStore, and drops responses that arrive after a
   newer one, after the user signed out, or after the user created or left an
   organisation. **[Tested]**
-- **Access synchronisation [Tested, In review]** ([ADR 0004](adr/0004-organization-access-sync.md)).
+- **Access synchronisation [Tested]** ([ADR 0004](adr/0004-organization-access-sync.md)).
   `sync(reason)` reloads the list when the app returns to the foreground
   (skipped while the list is younger than 30 s), when the user switches
   organisation, when any API answer says the access changed
@@ -290,7 +290,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-27 (PR #27 after merging `main`) |
 | Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-27 (PR #27 after merging `main`); in Phase 5B (2026-10-26) a deliberate unused variable made it exit 1 |
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 37 tests passed on 2026-10-27 locally on PR #27 after merging `main`, against backend `main` `91349f0` (PR #18 merged; `E2E_BACKEND_DIR`, temporary SQLite file); 34 before PR #26 added `booking-retry.spec.ts` |
-| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-27 (PR #27 after merging `main`; one earlier local run that day failed three checks, including an icon-package conflict with no icon package installed, and the next three runs passed unchanged); first 20/20 on 2026-10-24 after `e104927` (merged PR #11) |
+| Expo Doctor | Dependency versions match the SDK version list Expo publishes | 19/20 on 2026-10-28, on `main` too: Expo published new SDK 58 patch versions of `expo`, `expo-auth-session`, `expo-dev-client` and `expo-web-browser`, aligned in PR #29. Before that, 20/20 on 2026-10-27 (PR #27 after merging `main`; one earlier local run that day failed three checks, including an icon-package conflict with no icon package installed, and the next three runs passed unchanged); first 20/20 on 2026-10-24 after `e104927` (merged PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
 | Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). On 27 October, on an isolated database copy (logged): the sole-Owner member list of PR #22 (S1, S3, S5, S6), booking retries and organisation access refresh (D1–D8), an offline start, and a cold start after more than a day without a browser login ([Phase 5E run](device-testing.md#phase-5e-run-27-october-2026)). Not run: work or school account, a new user's first sign-in, Admin/Member views, TalkBack (S4), cancelled sign-in, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
 
@@ -373,14 +373,14 @@ new sign-in after sign-out; signed-in requests to the local API over
   ten existing files (components and one hook) that set state synchronously in an effect
   (listed in `eslint.config.js`); all other and all new files are checked.
   Refactoring those components is a follow-up.
-- **The lint check cannot be made "required" on GitHub.** Branch protection
-  needs GitHub Pro for a private repository, so a failing check shows red but
-  does not technically prevent a merge.
-- **`npm audit` reports 5 high-severity findings** from 2 advisories
-  (`node-forge` and `zod` under `@expo/cli`). They are in the Expo CLI
-  tooling, not the app bundle, and were present before PR #9;
-  `npm audit fix --force` would downgrade the SDK. See
-  [security-advisories.md](security-advisories.md).
+- **CI checks are not "required" on GitHub.** `main` has no branch protection
+  or ruleset, so a failing check shows red but does not technically prevent a
+  merge. The repository is public, so both are available on GitHub Free;
+  turning them on is the owner's decision.
+- **`npm audit` reports high-severity findings** in the Expo CLI tooling
+  (`@expo/cli`, `@expo/config`), not in the app bundle;
+  `npm audit fix --force` would downgrade the SDK. The current findings and
+  their dependency paths are in [security-advisories.md](security-advisories.md).
 - **No browser sign-in.** Neither this app's web build nor the Angular web
   client in the backend repository signs users in; both use the API's
   anonymous demo mode.
