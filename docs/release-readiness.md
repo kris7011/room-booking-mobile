@@ -67,5 +67,25 @@ build unless noted:
 |---|---|
 | Mobile repository visibility | **Public**, on purpose: it is a portfolio project that reviewers can inspect. The 24 October audit found no secrets in history, and the Phase 5F commits were scanned with gitleaks before they were pushed (28 October) |
 | Branch protection | **Decision.** `main` has no branch protection or ruleset, so a red check does not block a merge. For a public repository both are available on GitHub Free |
-| Known advisories | `node-forge` and `zod` via `@expo/cli` (development tooling only; [security-advisories.md](security-advisories.md)). Do not run `npm audit fix --force`: it offers an old Expo |
+| Known advisories | PR #29 resolves the `node-forge` finding. After that update, `zod` via `@expo/cli` and `deepmerge` via `@expo/config` remain (development tooling only; [security-advisories.md](security-advisories.md), updated in #29). Do not run `npm audit fix --force`: it offers an old Expo |
 | CI | Unit tests, type check, ESLint and Expo Doctor on every PR; Playwright E2E of the web build against the real API. Expo Doctor fails on `main` until the patch versions above are aligned |
+
+## 6. Phase 5F merge and verification
+
+Each pull request merge requires the owner's explicit approval.
+
+1. Merge #29 first. Update #28 and the fix branches (#30–#32) with the
+   resulting `main`, then push the branch updates to trigger fresh PR checks.
+2. Merge #28 once its fresh checks pass. Verify that #33 now targets `main`
+   and retarget it if necessary; update its head with the current `main`
+   containing #29, then run fresh checks.
+3. Merge #33 and then #30–#32 in any order. Before each merge, verify the
+   current head SHA, mergeability, TypeScript, ESLint, unit tests, Expo Doctor
+   and Playwright E2E. If the base has changed, refresh the branch and checks.
+4. Rebuild the Samsung development build from the final merged tree, then
+   run F1–F4 and the applicable sign-in checks before claiming device results.
+
+Re-running an old workflow uses its original `GITHUB_SHA` and `GITHUB_REF`
+([GitHub documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)).
+An old run therefore does not test the dependency update from #29.
+Record the new head SHA and workflow run URLs after each branch update.
