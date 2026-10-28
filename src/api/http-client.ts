@@ -47,6 +47,9 @@ export function setAccessTokenProvider(provider: AccessTokenProvider | null): vo
   accessTokenProvider = provider;
 }
 
+/** Problem codes that refuse the account itself, in every organisation: disabled, or no longer registered. */
+export const ACCOUNT_REFUSED_CODES: ReadonlySet<string> = new Set(['user_disabled', 'user_not_registered']);
+
 /**
  * Problem codes that mean the caller's membership, role or account changed
  * since the app last asked: removed (or the organisation is gone), demoted,
@@ -55,8 +58,7 @@ export function setAccessTokenProvider(provider: AccessTokenProvider | null): vo
 export const ACCESS_CHANGED_CODES: ReadonlySet<string> = new Set([
   'organization_not_found',
   'organization_permission_denied',
-  'user_disabled',
-  'user_not_registered',
+  ...ACCOUNT_REFUSED_CODES,
 ]);
 
 let accessChangedListener: ((code: string) => void) | null = null;

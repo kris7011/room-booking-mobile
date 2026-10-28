@@ -18,8 +18,8 @@ the backend walkthrough:
 | **[In review]** | Implemented on an open pull request, not yet on `main`. |
 | **[Not implemented]** | Proposed or future work. Nothing in the code does this yet. |
 
-Last reviewed: 2026-10-26 (phase 5A, issue #18): device results from the
-Samsung on 26 October, separated into owner reports and independently logged
+Last reviewed: 2026-10-27 (phase 5E): device results from the
+Samsung on 26 and 27 October, separated into owner reports and independently logged
 checks in [device-testing.md](device-testing.md#current-status).
 
 **Related documents:** [local development](local-development.md) ·
@@ -56,7 +56,8 @@ src/
   auth/                    Microsoft sign-in: AuthController, token client, ID token, SecureStore session
   api/                     http-client.ts (fetch, tokens, errors), live/demo/organisation API clients
   organizations/           OrganizationController, SessionProvider, permissions, invitation links
-  bookings/                booking-submission.ts: Idempotency-Key per booking, safe retry after a lost answer
+  bookings/                booking-submission.ts: Idempotency-Key per booking, safe retry after a lost answer;
+                           booking-area-choice.ts: which booking area (and API) the home screen shows
   screens/                 AppScreens (booking ↔ administration), HomeScreen, OrganizationAdminScreen
   components/              Presentational components; admin/ and organizations/ sub-folders
   models/                  TypeScript types mirroring the API contracts
@@ -268,13 +269,33 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
   onboarding) with a Danish notice; a changed role is applied with a notice,
   and the administration page and the upcoming bookings load again for it
   (keyed by role) while the search and draft stay. A disabled or unregistered
-  account clears the list. Offline or a server error keeps the list but says it
+  account clears the list, and **[Tested, In review]** also makes
+  `useServerIdentity` ask `/api/me` again (`shouldRecheckIdentity` in
+  `current-user.ts`, codes in `ACCOUNT_REFUSED_CODES`), so the account panel
+  shows the API's refusal instead of a stale *✓ Registreret*. Only a
+  registered identity is checked again: `/api/me` answers a disabled account
+  with the same `403 user_disabled`, and that answer must not start another
+  check. Offline or a server error keeps the list but says it
   may be out of date ("Serveren afgør stadig, hvad du må"). The local role is
   never an authority: the API checks every request. The `AppState` and
   listener wiring in `SessionProvider` is not covered by an automated test.
 - `HomeScreen` renders `BookingArea` with `key={active.publicId}`. Changing
   the key makes React discard the component and its state, so switching
   organisations always starts with an empty search, form and list.
+- **Which booking area [Tested, In review]**: `chooseBookingArea` in
+  [`booking-area-choice.ts`](../src/bookings/booking-area-choice.ts) decides
+  it, and `HomeScreen` only renders the choice. A booking area loads the room
+  overview as soon as it is mounted, so the rule also decides the first
+  request. Demo mode: demo data. While a stored session is being restored:
+  none, so no token-less `GET /api/rooms` (answered `401`) leaves the app at
+  a cold start. Signed out or without sign-in: the original endpoints. A
+  registered user: the active organisation. An API without organisations
+  (`unsupported`, `not-configured`, `registration-unsupported`) or one the
+  token is not sent to (`insecure-transport`): the original endpoints.
+  Otherwise (still checking, or `/api/me` refused the user or failed):
+  none; the account panel says why and offers *Prøv igen*. The original
+  endpoints serve only the legacy organisation, so they would repeat the
+  refusal or put the user there without their choosing it.
 - Every request names its organisation in the URL, so a late response can
   only ever describe the organisation it was asked for.
 - What the UI shows or hides (`canAdminister`, `canModify` from the API) is a
@@ -302,7 +323,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 37 tests passed on 2026-10-27 locally on PR #27 after merging `main`, against backend `main` `91349f0` (PR #18 merged; `E2E_BACKEND_DIR`, temporary SQLite file); 34 before PR #26 added `booking-retry.spec.ts` |
 | Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-27 (PR #27 after merging `main`; one earlier local run that day failed three checks, including an icon-package conflict with no icon package installed, and the next three runs passed unchanged); first 20/20 on 2026-10-24 after `e104927` (merged PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
-| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). Not run: work or school account, a new user's first sign-in, Admin/Member views, the sole-Owner member list of PR #22, cancelled and offline sign-in, token renewal, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
+| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). On 27 October, on an isolated database copy (logged): the sole-Owner member list of PR #22 (S1, S3, S5, S6), booking retries and organisation access refresh (D1–D8), an offline start, and a cold start after more than a day without a browser login ([Phase 5E run](device-testing.md#phase-5e-run-27-october-2026)). Not run: work or school account, a new user's first sign-in, Admin/Member views, TalkBack (S4), cancelled sign-in, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
 
 **Not covered by automated tests:** React Native components on Android/iOS
 (there are no component tests; components are exercised only through the web
