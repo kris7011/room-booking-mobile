@@ -323,7 +323,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 37 tests passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32), against backend `main` `91349f0`. Earlier: 37 on 2026-10-27 locally on PR #27 after merging `main`, against backend `main` `91349f0` (PR #18 merged; `E2E_BACKEND_DIR`, temporary SQLite file); 34 before PR #26 added `booking-retry.spec.ts` |
 | Expo Doctor | Dependency versions match the SDK version list Expo publishes | 20/20 on 2026-10-28 after PR #29 was merged, in CI and locally on every later Phase 5F PR. Earlier that day 19/20, on `main` too: Expo had published new SDK 58 patch versions of `expo`, `expo-auth-session`, `expo-dev-client` and `expo-web-browser`, which PR #29 aligned. Before that, 20/20 on 2026-10-27 (PR #27 after merging `main`; one earlier local run that day failed three checks, including an icon-package conflict with no icon package installed, and the next three runs passed unchanged); first 20/20 on 2026-10-24 after `e104927` (merged PR #11) |
 | API target script | `Set-ApiTarget.ps1`: hosted/local switch, Entra lines preserved, unsafe URLs and duplicate keys rejected | [Tested] in CI on Linux `pwsh`; [Manual] on Windows PowerShell 5.1, 2026-10-24 (isolated copy, 13 checks) |
-| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). On 27 October, on an isolated database copy (logged): the sole-Owner member list of PR #22 (S1, S3, S5, S6), booking retries and organisation access refresh (D1–D8), an offline start, and a cold start after more than a day without a browser login ([Phase 5E run](device-testing.md#phase-5e-run-27-october-2026)). Not run: a rebuild with the SDK 58 patches of PR #29 and the Phase 5F checks F1–F4 ([procedure](device-testing.md#phase-5f-manual-checks-for-the-owner)), work or school account, a new user's first sign-in, Admin/Member views, TalkBack (S4), cancelled sign-in, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
+| Device (Samsung SM-A057G) | Development build, redirect, `adb reverse`; the [sign-in checklist](device-testing.md#sign-in-checklist) | [Manual], partly done. Development build, redirect and deep link (PR #6), `adb reverse` (PR #7). The 23 October personal-account rejection is diagnosed in issue #16 ([details](device-testing.md#personal-account-rejection-23-october-2026)). On 26 October, in the rebuilt development build: `/common/` authority and redirect handler configured, registration shown and personal-account session restored after restarts (logged); sign-out and a new interactive sign-in, and a signed-in booking kept after a restart (owner reports); Owner administration with writes on an isolated database copy (logged, [checklist](device-testing.md#organisation-administration-checklist-26-october-2026)). On 27 October, on an isolated database copy (logged): the sole-Owner member list of PR #22 (S1, S3, S5, S6), booking retries and organisation access refresh (D1–D8), an offline start, and a cold start after more than a day without a browser login ([Phase 5E run](device-testing.md#phase-5e-run-27-october-2026)). On 28 October, on the build rebuilt from `main` `ccc8204` (SDK 58 patches of PR #29) and an isolated database copy (logged): the Phase 5F checks F1–F4, sign-out and a new sign-in (account picker by owner report), SecureStore contents and logs free of tokens ([Phase 5F run](device-testing.md#phase-5f-run-28-october-2026)). Not run: work or school account, a new user's first sign-in, Admin/Member views, TalkBack (S4), cancelled sign-in, invitation links, time handling; the owner's procedure for the ones a single account allows is in [device-testing.md](device-testing.md#phase-5c-manual-checks-for-the-owner). See [device-testing.md](device-testing.md#current-status). |
 
 **Not covered by automated tests:** React Native components on Android/iOS
 (there are no component tests; components are exercised only through the web
@@ -338,12 +338,15 @@ These cannot be verified on Windows, by CI or in the web build. Done on
 the rebuilt development build; personal-account sign-in and the redirect
 back to `roombookingdev://auth`; the session restored across restarts and a
 new sign-in after sign-out; signed-in requests to the local API over
-`adb reverse`; organisation switching and the Owner's screens. Still open:
+`adb reverse`; organisation switching and the Owner's screens. On 27 October:
+an offline start and a silent renewal (indirectly). On 28 October, on the
+development build rebuilt from `main`: the Phase 5F checks F1–F4, a logged
+sign-out and new sign-in, and SecureStore contents before and after sign-out
+([details](device-testing.md#sign-in-on-the-rebuilt-build-28-october)). Still open:
 
 1. A work or school account, and the first sign-in (registration) of a new
    account.
-2. SecureStore contents after sign-out, silent token renewal after an hour,
-   offline start, revoked sessions.
+2. Revoked sessions and a cancelled sign-in.
 3. A **restored** database behind `Set-ApiTarget.ps1 -Mode Local`: the
    organisations, rooms, bookings and roles look as they did before.
 4. Token transport on the device: a plain-HTTP Wi-Fi address gets no token.
@@ -368,9 +371,10 @@ new sign-in after sign-out; signed-in requests to the local API over
   `io.github.kris7011.roombooking.dev`. **[Manual]**, built and installed on a
   Samsung SM-A057G (PR #6), and rebuilt after `e104927` on 26 October 2026.
   The SDK 58 patch update merged on 28 October (PR #29) changes native
-  modules, so the build has to be made again before the next device checks;
-  that rebuild has not been done
-  ([procedure](device-testing.md#rebuilding-the-development-build)).
+  modules, so the build was made again from `main` `ccc8204` the same day and
+  installed as an update, keeping the app's data
+  ([record](device-testing.md#rebuild-28-october-2026);
+  [procedure](device-testing.md#rebuilding-the-development-build)).
 - **Release/production builds: [Not implemented].** There is no `eas.json`,
   no release package ID, no release redirect URI registration, and no store
   configuration. A release build would send tokens over HTTPS only, so it
@@ -400,10 +404,16 @@ new sign-in after sign-out; signed-in requests to the local API over
   patch release can fail CI without any change here (it did on 2026-10-24;
   fixed by `e104927`, which bumped only the two reported packages, and on
   `main` by the now-merged PR #11). This is
-  intended: it is the signal to update. The installed development build is
-  older than that bump until it is rebuilt.
+  intended: it is the signal to update. A version bump that changes native
+  modules also means rebuilding the installed development build (last done
+  on 2026-10-28, after PR #29).
 - **No component tests.** The logic behind components is tested in `npm test`;
   rendering is checked by the web E2E tests only.
+- **One intermittent E2E failure.** `e2e/specs/search.spec.ts:35` (a day
+  chip scrolled into view) failed twice in CI on 28 October 2026 and passed
+  on a re-run of the same commit each time. The cause is not known; Playwright
+  `retries` stay at 0 so it is not hidden
+  ([issue #34](https://github.com/kris7011/room-booking-mobile/issues/34)).
 - **Lint baseline.** `react-hooks/set-state-in-effect` is switched off for the
   ten existing files (components and one hook) that set state synchronously in an effect
   (listed in `eslint.config.js`); all other and all new files are checked.
