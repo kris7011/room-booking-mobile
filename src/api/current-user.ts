@@ -5,7 +5,7 @@ import type {
   RegisteredUser,
   RegistrationResponse,
 } from '../models/current-user';
-import { ApiError, requestJson } from './http-client';
+import { ACCOUNT_REFUSED_CODES, ApiError, requestJson } from './http-client';
 
 /** GET /api/me: the identity the API derives from the access token. Read-only. Needs a signed-in user. */
 export function fetchCurrentUser(): Promise<CurrentUserResponse> {
@@ -119,6 +119,20 @@ export function classifyCurrentUserError(error: unknown, describe: (error: unkno
   return { status: 'error', message: describe(error) };
 }
 
+/**
+ * Whether an API answer that says the access changed (see
+ * setAccessChangedListener) means the identity must be checked again with
+ * /api/me: the account itself was refused (disabled, or no longer
+ * registered) while the app still shows the user as registered.
+ *
+ * Only a registered identity: /api/me answers a disabled account with the
+ * same code, and that answer to the check itself (status 'checking') must
+ * not start another check, or the app would ask again and again.
+ */
+export function shouldRecheckIdentity(code: string, identity: ServerIdentity | null): boolean {
+  return identity?.status === 'registered' && ACCOUNT_REFUSED_CODES.has(code);
+}
+
 const ROLE_NAMES: Record<MembershipRole, string> = {
   Owner: 'Ejer',
   Admin: 'Administrator',
@@ -151,4 +165,15 @@ export function describeOrganizationAccess(user: RegisteredUser): { title: strin
     title: count === 1 ? 'Din organisation' : `Dine ${count} organisationer`,
     detail: user.organizations.map(describeMembership).join('\n'),
   };
+}
+
+/**
+ * The signed-in session's warning (AuthState) for the account panel, or
+ * undefined when the identity line above it already says the same. Offline,
+ * the token renewal and the /api/me check fail with one error, and both
+ * described it; the identity line keeps it, with its "Prøv igen".
+ */
+export function sessionWarningToShow(warning: string | undefined, identity: ServerIdentity | null): string | undefined {
+  const identityMessage = identity !== null && 'message' in identity ? identity.message : undefined;
+  return warning === identityMessage ? undefined : warning;
 }

@@ -26,6 +26,8 @@ test.describe('Room overview', () => {
 
     await expect(app.alert).toContainText('Kunne ikke hente mødelokaler');
     await expect(app.alert).toContainText(`Kunne ikke få forbindelse til API'et (${API_URL}).`);
+    // Only the web build mentions CORS: Metro inlines process.env.EXPO_OS as 'web' here.
+    await expect(app.alert).toContainText("og at API'et tillader CORS fra denne side.");
     await expect(app.overviewRoom(ROOMS.focus)).toHaveCount(0);
 
     // The API is reachable again: "Prøv igen" loads the rooms.

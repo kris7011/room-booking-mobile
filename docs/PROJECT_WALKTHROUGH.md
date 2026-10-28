@@ -56,7 +56,8 @@ src/
   auth/                    Microsoft sign-in: AuthController, token client, ID token, SecureStore session
   api/                     http-client.ts (fetch, tokens, errors), live/demo/organisation API clients
   organizations/           OrganizationController, SessionProvider, permissions, invitation links
-  bookings/                booking-submission.ts: Idempotency-Key per booking, safe retry after a lost answer
+  bookings/                booking-submission.ts: Idempotency-Key per booking, safe retry after a lost answer;
+                           booking-area-choice.ts: which booking area (and API) the home screen shows
   screens/                 AppScreens (booking ↔ administration), HomeScreen, OrganizationAdminScreen
   components/              Presentational components; admin/ and organizations/ sub-folders
   models/                  TypeScript types mirroring the API contracts
@@ -169,6 +170,16 @@ Code: [`http-client.ts`](../src/api/http-client.ts).
   only shown for codes the app does not know. Codes that only the
   administration screens meet are in `organizations/organization-messages.ts`,
   which falls back to `error-messages.ts`.
+- **Platform-specific and single messages [Tested, In review]**: a `network`
+  error mentions CORS only in the web build, because only a browser blocks
+  a response by CORS. `describeError` reads `process.env.EXPO_OS`, which Metro
+  inlines with the platform it bundles for, so the Android bundle does not
+  even contain the web text (checked in exported bundles; the web E2E test
+  checks the hint). In the account panel, `sessionWarningToShow`
+  (`current-user.ts`) hides the session warning when the identity line already
+  shows the same text: after an offline start, the token renewal and the
+  `/api/me` check fail with one error, and the identity line keeps it with
+  *Prøv igen*.
 
 ### Safe booking retries [Tested]
 
@@ -258,13 +269,33 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
   onboarding) with a Danish notice; a changed role is applied with a notice,
   and the administration page and the upcoming bookings load again for it
   (keyed by role) while the search and draft stay. A disabled or unregistered
-  account clears the list. Offline or a server error keeps the list but says it
+  account clears the list, and **[Tested, In review]** also makes
+  `useServerIdentity` ask `/api/me` again (`shouldRecheckIdentity` in
+  `current-user.ts`, codes in `ACCOUNT_REFUSED_CODES`), so the account panel
+  shows the API's refusal instead of a stale *✓ Registreret*. Only a
+  registered identity is checked again: `/api/me` answers a disabled account
+  with the same `403 user_disabled`, and that answer must not start another
+  check. Offline or a server error keeps the list but says it
   may be out of date ("Serveren afgør stadig, hvad du må"). The local role is
   never an authority: the API checks every request. The `AppState` and
   listener wiring in `SessionProvider` is not covered by an automated test.
 - `HomeScreen` renders `BookingArea` with `key={active.publicId}`. Changing
   the key makes React discard the component and its state, so switching
   organisations always starts with an empty search, form and list.
+- **Which booking area [Tested, In review]**: `chooseBookingArea` in
+  [`booking-area-choice.ts`](../src/bookings/booking-area-choice.ts) decides
+  it, and `HomeScreen` only renders the choice. A booking area loads the room
+  overview as soon as it is mounted, so the rule also decides the first
+  request. Demo mode: demo data. While a stored session is being restored:
+  none, so no token-less `GET /api/rooms` (answered `401`) leaves the app at
+  a cold start. Signed out or without sign-in: the original endpoints. A
+  registered user: the active organisation. An API without organisations
+  (`unsupported`, `not-configured`, `registration-unsupported`) or one the
+  token is not sent to (`insecure-transport`): the original endpoints.
+  Otherwise (still checking, or `/api/me` refused the user or failed):
+  none; the account panel says why and offers *Prøv igen*. The original
+  endpoints serve only the legacy organisation, so they would repeat the
+  refusal or put the user there without their choosing it.
 - Every request names its organisation in the URL, so a late response can
   only ever describe the organisation it was asked for.
 - What the UI shows or hides (`canAdminister`, `canModify` from the API) is a

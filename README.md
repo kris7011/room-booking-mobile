@@ -263,9 +263,9 @@ and [walkthrough](https://github.com/kris7011/meeting-room-booking/blob/main/doc
   exercised only through the web build in E2E.
 - **No offline mode**, and sign-in needs internet access to Microsoft even
   when the API runs locally.
-- **`npm audit` reports 5 high-severity findings** in the Expo CLI tooling.
-  They are not in the app bundle, and the only automatic fix is an SDK
-  downgrade. See [security-advisories.md](docs/security-advisories.md).
+- **`npm audit` reports high- and low-severity findings** in the Expo CLI
+  tooling (`zod`, `deepmerge`). They are not in the app bundle, and the only
+  automatic fix is an SDK downgrade. See [security-advisories.md](docs/security-advisories.md).
 
 ## How this project was built
 
