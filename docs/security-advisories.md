@@ -1,42 +1,57 @@
 # Dependency security advisories
 
-`npm audit` reports **5 high-severity findings**. They come from **2
-advisories** in two transitive packages, `node-forge` and `zod`, that are
-reached only through the Expo command-line tool (`@expo/cli`). npm also
-flags every package on the path to them, which is why the count is 5.
+`npm audit` reports **3 high-severity and 5 low-severity findings**. They
+come from **2 advisories** in two transitive packages, `zod` (high) and
+`deepmerge` (low), that are reached only through the Expo command-line tool
+and its config loader (`@expo/cli`, `@expo/config`). npm also flags every
+package on the path to them, which is why the counts are higher than 2.
 
-Last checked: 2026-10-24, with `expo` 58.0.19 and `@expo/cli` 58.1.15.
+Last checked: 2026-10-28, with `expo` 58.0.20 and `@expo/cli` 58.1.16.
 
 ## The findings
 
 | Package (installed) | Advisory | Patched version | How it is reached |
 |---|---|---|---|
-| `node-forge` 1.4.0 | [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) (CVE-2026-85393): RSA PKCS#1 v1.5 signature verification accepts extra nested `DigestAlgorithm` elements | None published (`<= 1.4.0` affected) | `expo` → `@expo/cli` → `node-forge`, and `@expo/cli` → `@expo/code-signing-certificates` → `node-forge` |
-| `zod` 3.25.76 | [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (CVE-2023-54404): memory exhaustion while validating oversized constrained collections | 4.6.6 (a new major version) | `expo` → `@expo/cli` → `zod` |
-| `@expo/code-signing-certificates` | Flagged because it depends on `node-forge` | – | `@expo/cli` |
-| `@expo/cli` | Flagged because it depends on the packages above | – | `expo` |
-| `expo` | Flagged because it depends on `@expo/cli` | – | Direct dependency |
+| `zod` 3.25.76 | [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (CVE-2023-54404): memory exhaustion while validating oversized constrained collections (high) | 4.6.6 (a new major version) | `expo` → `@expo/cli` → `zod`; also the development dependency `eslint-config-expo` → `eslint-plugin-react-hooks` → `zod` |
+| `deepmerge` 4.3.1 | [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) (CVE-2026-93753): `mergeObject()` allows prototype poisoning of returned objects (low, `>=4.2.0 <=4.3.1`) | None published (4.3.1 is the latest) | `expo` → `@expo/config` → `deepmerge` |
+| `@expo/cli` | Flagged (high) because it depends on `zod` and `@expo/config` | – | `expo` |
+| `expo` | Flagged (high) because it depends on `@expo/cli` and `@expo/config` | – | Direct dependency |
+| `@expo/config`, `@expo/metro-config`, `@expo/prebuild-config`, `@expo/local-build-cache-provider` | Flagged (low) because they depend on `deepmerge` through `@expo/config` | – | `expo` |
+
+### Resolved
+
+- `node-forge` [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv)
+  (CVE-2026-85393, high; `<= 1.4.0` affected), listed here on 2026-10-24:
+  the SDK 58 patch update to `expo` 58.0.20 installs `node-forge` 1.4.2,
+  which is outside the affected range, and `npm audit` no longer reports it.
+
+On 2026-10-28, before that update (`expo` 58.0.19), `npm audit` reported
+4 high (`node-forge`, `zod`, `@expo/cli`, `expo`) and the same 5 low
+findings. The `deepmerge` advisory (published 2026-09-18, updated
+2026-10-27) was not reported in the 2026-10-24 check; the update did not
+bring it in.
 
 ## CLI tooling versus code shipped in the app
 
 `expo` is a runtime dependency, but `@expo/cli` inside it is the tool that
 runs **on the developer's machine or the CI runner**: `expo start`,
-`expo export`, `expo run:android`. It is not part of the JavaScript bundle
-that is installed on a phone or served to a browser.
+`expo export`, `expo run:android`. `@expo/config` reads and rewrites the app
+configuration (`app.json`) for those commands. Neither is part of the
+JavaScript bundle that is installed on a phone or served to a browser.
 
-- In `@expo/cli` 58.1.15, `node-forge` is used only by its code-signing
-  helpers (`build/src/utils/codesigning.js`,
-  `build/src/run/ios/codeSigning/Security.js`), and `zod` only by schemas of
-  the development server's devtools plugins
-  (`build/src/start/server/DevToolsPlugin.schema.js`,
-  `createMCPDevToolsExtensionSchema.js`).
-- No file in `src/`, `App.tsx` or `index.ts` imports either package.
-- The exported bundles contain neither. On 2026-10-24 both
-  `expo export --platform android` (Hermes bytecode, 1.9 MB) and
+- In `@expo/cli` 58.1.16, `zod` is used only by schemas of the development
+  server's devtools plugins (`build/src/start/server/DevToolsPlugin.schema.js`,
+  `createMCPDevToolsExtensionSchema.js`). In `@expo/config` 58.0.8,
+  `deepmerge` is used only in `build/Config.js`, to merge changes into the app
+  configuration.
+- No file in `src/`, `App.tsx` or `index.ts` imports any of these packages.
+- The exported bundles contain none of them. On 2026-10-28 both
+  `expo export --platform android` (Hermes bytecode, 1.8 MB) and
   `expo export --platform web` (0.5 MB) were searched for `node-forge`,
-  `forge.pki`, `pkcs1`, `zod` and `ZodError`: no matches. Strings that are
-  known to be in the app (`roombookingdev`, *Log ind med Microsoft*) were
-  found, so the search itself worked.
+  `forge.pki`, `pkcs1`, `zod`, `ZodError`, `deepmerge` and
+  `isMergeableObject`: no matches. Strings that are known to be in the app
+  (`roombookingdev`, *Log ind med Microsoft*) were found, so the search
+  itself worked.
 
 The remaining exposure is therefore on development machines and CI runners
 while the Expo CLI runs, for example if the dev server processed
@@ -45,21 +60,22 @@ rather than ignored.
 
 ## Why they are not fixed here
 
-- `npm audit fix --force` proposes installing **`expo` 44.0.6**, a downgrade
-  across 14 SDK versions. That would break the app and is not applied.
-- `node-forge` has no patched release yet. The `zod` fix is in zod 4, while
-  `@expo/cli` 58.1.15 declares `zod` `^3.25.76`; forcing zod 4 through an
-  npm `overrides` entry would run the CLI against a major version it does
-  not declare support for.
-- The supported path is an `expo` patch release whose `@expo/cli` updates
-  these dependencies. `npx expo-doctor` in CI flags new SDK 58 patch versions,
-  and `npx expo install --fix` applies them.
+- `npm audit fix --force` proposes installing **`expo` 51.0.39**, a downgrade
+  across 7 SDK versions. That would break the app and is not applied.
+- The `zod` fix is in zod 4, while `@expo/cli` 58.1.16 declares `zod`
+  `^3.25.76`; forcing zod 4 through an npm `overrides` entry would run the
+  CLI against a major version it does not declare support for. `deepmerge`
+  has no patched release.
+- The supported path is an `expo` patch release whose `@expo/cli` and
+  `@expo/config` update these dependencies, as happened for `node-forge`.
+  `npx expo-doctor` in CI flags new SDK 58 patch versions, and
+  `npx expo install --fix` applies them.
 
 ## How to re-check
 
 ```bash
-npm audit                      # the full report
-npm ls node-forge zod --all    # the dependency paths
+npm audit                                # the full report
+npm ls zod deepmerge node-forge --all    # the dependency paths
 ```
 
 Update this document when the count or the dependency paths change.
