@@ -1,6 +1,6 @@
 # ADR 0004: Synchronise organisation access at lifecycle moments, not by polling
 
-- **Status:** Proposed (Phase 5D, in review)
+- **Status:** Accepted. On `main` through PR #27.
 - **Code:** `src/organizations/organization-controller.ts` (`sync`, `load`,
   `OrganizationNotice`), `src/organizations/SessionProvider.tsx`,
   `src/api/http-client.ts` (`setAccessChangedListener`, `ACCESS_CHANGED_CODES`),

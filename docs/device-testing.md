@@ -31,7 +31,7 @@ Each result says where it comes from:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Development build built (`expo run:android`), installed and started | Passed, 22 October; rebuilt after `e104927` and installed again, 26 October | PR #6; logged |
+| Development build built (`expo run:android`), installed and started | Passed, 22 October; rebuilt after `e104927` and installed again, 26 October. **Not rebuilt** yet with the SDK 58 patches merged on 28 October (PR #29); [procedure](#rebuilding-the-development-build) | PR #6; logged |
 | Metro logs `[auth] Redirect URI: roombookingdev://auth`; `adb` delivers that link to `.MainActivity` | Passed | PR #6 |
 | Sign-in configuration in the running development build: package `io.github.kris7011.roombooking.dev`, authority `/common/`, `roombookingdev://auth` registered as the redirect handler | **Passed**, 26 October | logged (`logcat`) |
 | A new interactive Microsoft sign-in with the personal account on `/common/`: the browser returns to the development build via `roombookingdev://auth` | **Passed**, 26 October | owner report. No `logcat` of this sign-in was captured |
@@ -43,6 +43,7 @@ Each result says where it comes from:
 | [Organisation administration as Owner](#organisation-administration-checklist-26-october-2026) | **Passed**, 26 October; Admin, Member and invitee views not run | logged |
 | [Sole-Owner member list](#phase-5c-sole-owner-member-list) (PR #22, issue #20): no role chips or *Forlad organisationen* for the only Owner, and the explanation instead | **Passed**, 27 October (S1, S3, S5, S6); S2 not observable; S4 (TalkBack) not run | logged |
 | [Phase 5D checks](#phase-5d-manual-checks-for-the-owner) D1–D8: booking retry after a lost connection, organisation access refresh, revoked and disabled access | **Passed**, 27 October, on an isolated database copy | logged |
+| [Phase 5F checks](#phase-5f-manual-checks-for-the-owner) F1–F4: no request while restoring, disabled account shown as such, no CORS hint on Android, offline message once | **Not run.** The fixes are on `main` (28 October); the development build must be rebuilt first | – |
 | Signed-in requests to a `127.0.0.1`-only API through `adb reverse tcp:5003 tcp:5003` | **Passed**, 26 October | logged (API log) |
 | Work or school account sign-in | **Not run**: no such account available | – |
 | First sign-in of a new, unregistered account | **Not run**: needs a second account | – |
@@ -356,7 +357,9 @@ with the owner's existing session; nobody signed in during the run.
 - **Isolation.** `adb reverse tcp:5003 tcp:5013`; the copy's API log showed
   the app's requests (`/api/me`, `/api/organizations`, rooms, bookings) before
   anything was written.
-- **Observations, not defects of the tested features:**
+- **Observations, not defects of the tested features** (each fixed in
+  Phase 5F, merged 28 October, not yet checked on the device; see
+  [below](#phase-5f-manual-checks-for-the-owner)):
   - While the session is restored at a cold start, the app sends one
     anonymous `GET /api/rooms` (answered `401`) before it knows it is signed
     in: `HomeScreen` renders the token-less `BookingArea` for every state
@@ -366,6 +369,79 @@ with the owner's existing session; nobody signed in during the run.
   - With the account disabled (D8), the account panel still shows
     *✓ Registreret i Room Booking*; only the organisation panel reports the
     disabled account.
+  - After the offline start (sign-in step 7), the account panel shows
+    *Kunne ikke få forbindelse til Microsoft…* twice.
+
+## Phase 5F: manual checks for the owner
+
+Phase 5F fixes the four observations above in three pull requests, all
+merged into `main` on 28 October 2026, each with regression tests that fail
+on the previous behaviour:
+
+| Pull request | Fix |
+|---|---|
+| #30 `fix/phase5f-session-restore-requests` | No booking area, and so no request, while the session is restored; none either when `/api/me` refused the user or failed (`chooseBookingArea`) |
+| #31 `fix/phase5f-disabled-account-status` | An answer with `user_disabled` or `user_not_registered` makes the app ask `/api/me` again (`shouldRecheckIdentity`) |
+| #32 `fix/phase5f-error-message-platform-and-duplicates` | The CORS hint only in the web build (`process.env.EXPO_OS`); the session warning hidden when the identity line already shows it (`sessionWarningToShow`) |
+
+The three fixes are JavaScript only, but `main` also contains the SDK 58
+patch update (#29, merged 28 October: `expo` 58.0.20, `expo-auth-session`
+58.0.15, `expo-dev-client` 58.0.16, `expo-web-browser` 58.0.7), which
+changes native modules. The development build installed on 26 October was
+made with the older patches, so **rebuild it from `main` before F1–F4**.
+That build has not been made or tried on the device yet.
+
+### Rebuilding the development build
+
+Prerequisites: the Android toolchain from
+[android-development-build.md](android-development-build.md) (JDK 17,
+Android SDK with platform-tools, `JAVA_HOME` and `ANDROID_HOME`), the phone on
+USB with USB debugging on, and `.env.local` with
+`EXPO_PUBLIC_API_URL=http://localhost:5003` and the two `EXPO_PUBLIC_ENTRA_*`
+values. In a clean checkout of `main`:
+
+```powershell
+git switch main; git pull --ff-only
+npm ci
+npx expo-doctor              # expect 20/20
+adb devices                  # the Samsung is listed as "device"
+adb reverse tcp:8081 tcp:8081
+npm run android:dev-build    # npx expo run:android: regenerates android/, builds, installs, starts Metro
+```
+
+After the install, check that Metro logs
+`[auth] Redirect URI: roombookingdev://auth` and that a stored session is
+restored (sign-in step 5); if the session is gone, sign in again. The update
+changes `expo-auth-session` and `expo-web-browser`, so do sign-in step 9
+(**Log ud**, then **Log ind med Microsoft**) on the new build with `logcat`
+running; that step is still open anyway.
+
+### Phase 5F: F1–F4
+
+F2 changes the database: use an isolated copy as in
+[Phase 5D](#before-you-start-1), never the real development database. Turn
+on the API's request log with
+`${env:Logging__LogLevel__Microsoft.AspNetCore.Hosting.Diagnostics}='Information'`
+before starting it.
+
+| Step | What to do | Expected | Result |
+|---|---|---|---|
+| F1 | With a stored session: `adb shell am force-stop io.github.kris7011.roombooking.dev`, then start the app | The API log shows `/api/me` (`200`), then `/api/organizations` and the active organisation's rooms; **no** `GET /api/rooms` answered `401` | Not run |
+| F2 | On the copy, D8's `UPDATE … "DisabledUtc" = 638100000000000000 …`, then return to the app after 30 s (or search) | The account panel shows *Din Room Booking-konto er deaktiveret. Kontakt en administrator, hvis det er en fejl.* with *Prøv igen*, and no *✓ Registreret*; no organisation panel and no booking area. The API log shows **one** extra `GET /api/me` answered `403`, not repeated. Undo (`… SET "DisabledUtc" = NULL …`), *Prøv igen* in the account panel: *✓ Registreret*, the organisations and the booking area return | Not run |
+| F3 | Cut the API connection as in [Cutting the connection](#cutting-the-connection-to-the-api), then *Prøv igen* on the room overview | The message ends *Tjek at backend kører, og at adressen passer til din enhed.* with no mention of CORS | Not run |
+| F4 | Sign-in step 7 again: flight mode, force-stop, start the app | *Kunne ikke få forbindelse til Microsoft…* appears **once**, on the line with *Prøv igen*; no booking area. With the network back, *Prøv igen*: *✓ Registreret*, organisations and rooms | Not run |
+
+After #31 (`fix/phase5f-disabled-account-status`), D8's expected result changes:
+the account panel, not the organisation panel, reports the disabled account,
+and the organisation panel is hidden.
+
+Automated evidence (28 October, local, on a merge of the three branches with
+`main`): 458 unit tests passed, type check and ESLint clean, Playwright E2E
+37 passed against backend `main` (`91349f0`). An exported Android bundle
+contains only the native network message; the web bundle keeps the CORS hint.
+After the merges, the same results on `main` with #29 included, plus Expo
+Doctor 20/20 ([release-readiness.md](release-readiness.md#6-phase-5f-merge-and-verification)).
+None of this is a device result.
 
 ## Sign-in against a local API over USB
 
