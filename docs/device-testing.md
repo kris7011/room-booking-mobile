@@ -44,6 +44,7 @@ Each result says where it comes from:
 | [Sole-Owner member list](#phase-5c-sole-owner-member-list) (PR #22, issue #20): no role chips or *Forlad organisationen* for the only Owner, and the explanation instead | **Passed**, 27 October (S1, S3, S5, S6); S2 not observable; S4 (TalkBack) not run | logged |
 | [Phase 5D checks](#phase-5d-manual-checks-for-the-owner) D1–D8: booking retry after a lost connection, organisation access refresh, revoked and disabled access | **Passed**, 27 October, on an isolated database copy | logged |
 | [Phase 5F checks](#phase-5f-manual-checks-for-the-owner) F1–F4: no request while restoring, disabled account shown as such, no CORS hint on Android, offline message once | **Passed**, 28 October, on the rebuilt build and an isolated database copy ([results](#phase-5f-f1f4)) | logged |
+| [Day strip](#day-strip-smoke-test-pr-36-28-october-2026) (PR #36, issue #34): initial day visible, a partly hidden day revealed when tapped (both edges), no jump back to an older selection, search uses the chosen day | **Passed**, 28 October, JavaScript from `1c99a25` on the rebuilt build, isolated database copy (read only). A smoke test, not proof that the web race exists on Android | logged |
 | Signed-in requests to a `127.0.0.1`-only API through `adb reverse tcp:5003 tcp:5003` | **Passed**, 26 October | logged (API log) |
 | Work or school account sign-in | **Not run**: no such account available | – |
 | First sign-in of a new, unregistered account | **Not run**: needs a second account | – |
@@ -529,6 +530,42 @@ contains only the native network message; the web bundle keeps the CORS hint.
 After the merges, the same results on `main` with #29 included, plus Expo
 Doctor 20/20 ([release-readiness.md](release-readiness.md#6-phase-5f-merge-and-verification)).
 None of this is a device result.
+
+## Day-strip smoke test (PR #36), 28 October 2026
+
+PR #36 changes how `DaySelector` reveals the chosen day (issue #34). The race
+it fixes was shown on the web build only; this run checks that the shared
+component still behaves on Android. It is a smoke test, not proof that the
+race exists or is absent on native platforms.
+
+- **Build.** The installed development build from `ccc8204` (the
+  [rebuild of 28 October](#rebuild-28-october-2026)), not rebuilt: between
+  `ccc8204` and `1c99a25`, `package.json`, `package-lock.json` and `app.json`
+  are unchanged, only `DaySelector.tsx`, E2E code and documentation differ, and
+  the installed dependency trees of the build checkout and the PR checkout were
+  identical (735 packages). Metro served the JavaScript of `1c99a25` over
+  `adb reverse tcp:8081`. Later commits on the branch change documentation
+  only.
+- **Database.** A new copy of the Phase 5F test copy, served by backend
+  `main` (`91349f0`) on port 5013 through `adb reverse tcp:5003 tcp:5013`. The
+  run only read data: the copy's per-table fingerprint was the same before and
+  after, and the real development database's SHA-256 was unchanged.
+- **Driving.** Taps and swipes over `adb`, with the owner's existing session
+  (Legacy, 4 participants, 13:30–14:30). Chip positions and the selected state
+  come from `uiautomator dump`; the strip spans x = 90–990 on the 1080 px
+  screen.
+
+| Check | Result |
+|---|---|
+| Initial day visible | *I dag, 28. okt* selected, at x = 90–267 |
+| Tap the visible 57 px of *Søn, 1. nov*, cut off at the right edge | Selected and scrolled fully into view (792–956) |
+| Tap the visible 55 px of *Man, 2. nov*, cut off at the left edge | Selected and scrolled fully into view (124–288) |
+| Selections changed several times (*Søn 1.*, *Ons 4.*, *Man 2.*, *Fre 6. nov*); the strip swiped forward, back to the start and far forward between them | After each swipe, the strip stayed where it was left, also 3 s later; it never scrolled back to an earlier or the current selection on its own. A fully visible day (*Ons 4. nov*) was selected without scrolling |
+| Search with *Fre, 6. nov* selected | `GET …/rooms/available?startUtc=2026-11-06T12:30:00.000Z&endUtc=2026-11-06T13:30:00.000Z&minCapacity=4` (13:30–14:30 Danish winter time); the results header showed *Fre 6. nov, 13:30–14:30* with 3 free rooms |
+
+Afterwards: `adb reverse tcp:5003 tcp:5003` again, the 8081 forward removed,
+the app force-stopped (its data and session kept), the 5013 API and Metro
+stopped.
 
 ## Sign-in against a local API over USB
 
