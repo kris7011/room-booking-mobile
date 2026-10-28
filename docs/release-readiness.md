@@ -51,8 +51,9 @@ still open.
 From [device-testing.md](device-testing.md), all on the Samsung development
 build unless noted:
 
-- Phase 5F checks F1–F4 for the fixes of this phase (no rebuild needed: the
-  changes are JavaScript only).
+- Phase 5F checks F1–F4 for the fixes of this phase (#30, #31, #32). Those
+  changes are JavaScript only, but once #29 is in the served tree the
+  development build has to be rebuilt first.
 - Phase 5C S4 (TalkBack on the sole-Owner explanation); S2 was not observable.
 - Sign-in checklist steps 2, 3, 8, 10, 11, 12; step 9 has an owner report but no log.
 - Work or school account; the first sign-in of a new, unregistered account.

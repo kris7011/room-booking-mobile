@@ -377,15 +377,18 @@ Phase 5F fixes the four observations above in three pull requests
 (28 October 2026), each with regression tests that fail on the previous
 behaviour:
 
-| Branch | Fix |
+| Pull request | Fix |
 |---|---|
-| `fix/phase5f-session-restore-requests` | No booking area, and so no request, while the session is restored; none either when `/api/me` refused the user or failed (`chooseBookingArea`) |
-| `fix/phase5f-disabled-account-status` | An answer with `user_disabled` or `user_not_registered` makes the app ask `/api/me` again (`shouldRecheckIdentity`) |
-| `fix/phase5f-error-message-platform-and-duplicates` | The CORS hint only in the web build (`process.env.EXPO_OS`); the session warning hidden when the identity line already shows it (`sessionWarningToShow`) |
+| #30 `fix/phase5f-session-restore-requests` | No booking area, and so no request, while the session is restored; none either when `/api/me` refused the user or failed (`chooseBookingArea`) |
+| #31 `fix/phase5f-disabled-account-status` | An answer with `user_disabled` or `user_not_registered` makes the app ask `/api/me` again (`shouldRecheckIdentity`) |
+| #32 `fix/phase5f-error-message-platform-and-duplicates` | The CORS hint only in the web build (`process.env.EXPO_OS`); the session warning hidden when the identity line already shows it (`sessionWarningToShow`) |
 
 The changes are JavaScript only (no package, `app.json` or native change), so
 the installed development build runs them from Metro without a rebuild. Serve
 `main` once the three are merged, or a local merge of the three branches.
+This holds only while the Metro tree has the same Expo packages as the
+installed build: once the SDK 58 patch update (#29) is in that tree, rebuild
+the development build (`npx expo run:android`) before running F1–F4.
 F2 changes the database: use an isolated copy as in
 [Phase 5D](#before-you-start-1), never the real development database. Turn
 on the API's request log with
@@ -399,7 +402,7 @@ before starting it.
 | F3 | Cut the API connection as in [Cutting the connection](#cutting-the-connection-to-the-api), then *Prøv igen* on the room overview | The message ends *Tjek at backend kører, og at adressen passer til din enhed.* with no mention of CORS | Not run |
 | F4 | Sign-in step 7 again: flight mode, force-stop, start the app | *Kunne ikke få forbindelse til Microsoft…* appears **once**, on the line with *Prøv igen*; no booking area. With the network back, *Prøv igen*: *✓ Registreret*, organisations and rooms | Not run |
 
-After PR `fix/phase5f-disabled-account-status`, D8's expected result changes:
+After #31 (`fix/phase5f-disabled-account-status`), D8's expected result changes:
 the account panel, not the organisation panel, reports the disabled account,
 and the organisation panel is hidden.
 
