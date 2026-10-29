@@ -177,3 +177,12 @@ export function sessionWarningToShow(warning: string | undefined, identity: Serv
   const identityMessage = identity !== null && 'message' in identity ? identity.message : undefined;
   return warning === identityMessage ? undefined : warning;
 }
+
+/**
+ * A React key for screens that keep per-user state, such as the "you created
+ * X" notice: the registered user's public ID, so another user (after
+ * signing out and in) always starts with fresh state.
+ */
+export function userScopeKey(identity: ServerIdentity | null): string {
+  return identity?.status === 'registered' ? `user-${identity.user.publicId}` : 'no-user';
+}
