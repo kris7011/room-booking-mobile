@@ -49,11 +49,13 @@ Code: [`external-id-config.ts`](../src/auth/external-id-config.ts),
   development log says why it is not offered. A stored e-mail session in a
   build without these settings is signed out and deleted, never sent to
   Microsoft's endpoint.
-- **Invitations.** The API treats an External ID e-mail address as
-  unverified until its `ExternalId:EmailClaimIsVerified` setting is turned
-  on after a real token has been checked. Until then an e-mail user can
-  create organisations and book, but accepting an invitation answers
-  *verified_email_required*.
+- **Invitations.** The API never trusts the `email` claim of an External ID
+  token. When an e-mail user accepts an invitation, the API looks up the
+  address of their e-mail account in Microsoft Graph on their behalf
+  (backend [external-id-setup.md](https://github.com/kris7011/meeting-room-booking/blob/main/docs/external-id-setup.md#e-mail-addresses)).
+  Without the API's client secret, or if that lookup fails, accepting
+  answers *verified_email_required* ("Dit login giver ikke en bekræftet
+  e-mailadresse …"). The app sends nothing extra: the API decides.
 
 ## Configuration
 

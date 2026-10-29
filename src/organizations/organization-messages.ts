@@ -23,7 +23,7 @@ const MESSAGES: Readonly<Record<string, string>> = {
   invitation_email_mismatch:
     'Invitationen er sendt til en anden e-mailadresse end den, du er logget ind med. Log ind med den rigtige konto.',
   verified_email_required:
-    'Din Microsoft-konto sender ikke en bekræftet e-mailadresse, så invitationen kan ikke matches med dig.',
+    'Dit login giver ikke en bekræftet e-mailadresse, så invitationen kan ikke matches med dig.',
   already_member: 'Du er allerede medlem af organisationen.',
 };
 

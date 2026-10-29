@@ -19,8 +19,11 @@ export function describeSignInChoice(providers: readonly AuthProviderId[], demoM
       ? 'Du kan bruge demoen uden login. Log ind for at afprøve Microsoft-login eller login med e-mail-kode på telefonen.'
       : 'Du kan bruge demoen uden login. Log ind for at afprøve Microsoft-login på telefonen.';
   }
+  // Microsoft's e-mail page treats Hotmail, Outlook and Live addresses as
+  // Microsoft accounts and offers them no e-mail sign-up (seen 29 October 2026).
   return withEmail
-    ? 'Log ind med Microsoft eller med en engangskode på e-mail for at se og booke i din organisations mødelokaler.'
+    ? 'Log ind med Microsoft eller med en engangskode på e-mail for at se og booke i din organisations mødelokaler. ' +
+        'Har du en Hotmail-, Outlook- eller Live-adresse, så brug Log ind med Microsoft.'
     : 'Log ind med Microsoft for at se og booke i din organisations mødelokaler.';
 }
 
