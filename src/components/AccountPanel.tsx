@@ -10,6 +10,7 @@ import type { AuthProviderId } from '../auth/id-token';
 import { apiBaseUrl, isDemoMode } from '../config/env';
 import { useSession } from '../organizations/SessionProvider';
 import { colors, radius, spacing, typography } from '../theme/theme';
+import { IdentityLinkSection } from './IdentityLinkSection';
 import { PrimaryButton } from './PrimaryButton';
 
 // Login status, the login buttons (Microsoft, and e-mail code when it is
@@ -46,6 +47,7 @@ export function AccountPanel() {
         <Text style={styles.name}>{state.user.name}</Text>
         {state.user.username ? <Text style={styles.caption}>{state.user.username}</Text> : null}
         <ServerIdentityLine identity={identity} onRetry={recheck} />
+        {identity?.status === 'registered' ? <IdentityLinkSection accountName={identity.user.displayName} /> : null}
         {warning ? (
           <Text style={[styles.caption, styles.warning]} accessibilityLiveRegion="polite">
             {warning}

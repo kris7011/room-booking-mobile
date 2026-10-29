@@ -113,6 +113,12 @@ interface RequestOptions {
   body?: unknown;
   /** Extra request headers, e.g. Idempotency-Key. Never Authorization: that comes from the token provider. */
   headers?: Record<string, string>;
+  /**
+   * Sends this grant's token instead of the session's. Only for identity
+   * linking, where a second identity proves who it is (identity-links-api.ts).
+   * Never renewed and never retried; refused where a token may not be sent.
+   */
+  grant?: AccessGrant;
 }
 
 /** The Idempotency-Key header for a repeatable POST, or none without a key. */
@@ -135,6 +141,13 @@ export function buildUrl(path: string, query?: Record<string, QueryValue>): stri
 
 export async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = buildUrl(path, options.query);
+
+  if (options.grant) {
+    if (!canSendBearerToken(url, { development: isDevelopmentBundle() })) {
+      throw new ApiError('auth', 'A token is never sent to this address.');
+    }
+    return readResponse<T>(url, await send(url, options, options.grant));
+  }
   // Over an insecure connection the token is not even requested: the request
   // goes out exactly as without login.
   const provider = canSendBearerToken(url, { development: isDevelopmentBundle() }) ? accessTokenProvider : null;

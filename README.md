@@ -61,6 +61,10 @@ than mocks alone.
   External ID, next to Microsoft sign-in ([details](docs/external-id-login.md)):
   implemented and unit-tested, **not yet run against Microsoft** (the
   external tenant does not exist yet).
+- Linking a second login (another Microsoft account, or the e-mail code) to
+  the same user, only after signing in with it and confirming; never by
+  e-mail ([details](docs/identity-linking.md)). Unit-tested; not yet run
+  with real sign-ins.
 - Organisations for signed-in users: choose the active organisation, create
   one, accept invitations; Owners and Admins manage rooms, members and
   invitations ([details](docs/organisations.md)).
