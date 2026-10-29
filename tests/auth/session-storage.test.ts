@@ -15,7 +15,7 @@ import {
 import { TEST_OBJECT_ID, TEST_TENANT_ID } from '../support/entra-fixtures';
 import { MemoryStore } from '../support/memory-store';
 
-const user: AuthUser = { name: 'Søren', username: 'soren@contoso.example', tenantId: TEST_TENANT_ID, objectId: TEST_OBJECT_ID };
+const user: AuthUser = { provider: 'entra', name: 'Søren', username: 'soren@contoso.example', tenantId: TEST_TENANT_ID, objectId: TEST_OBJECT_ID };
 
 describe('saving and loading', () => {
   test('a short refresh token round-trips in one chunk', async () => {

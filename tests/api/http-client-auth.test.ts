@@ -13,7 +13,7 @@ import {
   type AccessTokenProvider,
 } from '../../src/api/http-client';
 import { liveApi } from '../../src/api/live-api';
-import { AuthController, type AuthControllerDeps } from '../../src/auth/auth-controller';
+import { AuthController, type AuthProviderClient } from '../../src/auth/auth-controller';
 import { AuthFlowError } from '../../src/auth/auth-errors';
 import { readIdTokenUser } from '../../src/auth/id-token';
 import { NOW_MS, PERSONAL_OBJECT_ID, PERSONAL_TENANT_ID, TEST_CLIENT_ID, makeIdToken } from '../support/entra-fixtures';
@@ -212,40 +212,44 @@ describe('a request never changes identity while it waits for its token', () => 
     users: { oid: string; name: string; tid?: string; username?: string }[],
     store: MemoryStore,
     clock: { now: number },
-    refresh?: AuthControllerDeps['refresh'],
+    refresh?: AuthProviderClient['refresh'],
   ) {
     let login = 0;
     let refreshed = 0;
     return AuthController.create({
       store,
-      authorize: async () => ({ type: 'success', code: 'code-from-entra', codeVerifier: 'verifier-1' }),
-      redeemCode: async () => {
-        const user = users[login++];
-        return {
-          accessToken: `fake-access-${user.name}`,
-          accessTokenExpiresAt: clock.now + HOUR,
-          refreshToken: `fake-refresh-${user.name}`,
-          idToken: makeIdToken({
-            oid: user.oid,
-            name: user.name,
-            ...(user.tid ? { tid: user.tid, iss: `https://login.microsoftonline.com/${user.tid}/v2.0` } : {}),
-            ...(user.username ? { preferred_username: user.username } : {}),
-          }),
-        };
+      providers: {
+        entra: {
+          authorize: async () => ({ type: 'success', code: 'code-from-entra', codeVerifier: 'verifier-1' }),
+          redeemCode: async () => {
+            const user = users[login++];
+            return {
+              accessToken: `fake-access-${user.name}`,
+              accessTokenExpiresAt: clock.now + HOUR,
+              refreshToken: `fake-refresh-${user.name}`,
+              idToken: makeIdToken({
+                oid: user.oid,
+                name: user.name,
+                ...(user.tid ? { tid: user.tid, iss: `https://login.microsoftonline.com/${user.tid}/v2.0` } : {}),
+                ...(user.username ? { preferred_username: user.username } : {}),
+              }),
+            };
+          },
+          refresh:
+            refresh ??
+            (async (refreshToken) => ({
+              accessToken: `${refreshToken.replace('refresh', 'access')}-renewed-${++refreshed}`,
+              accessTokenExpiresAt: clock.now + HOUR,
+              refreshToken: `${refreshToken}-${refreshed}`,
+            })),
+          readUser: (idToken) => readIdTokenUser(idToken, { clientId: TEST_CLIENT_ID, requiredTenantId: null, nowMs: clock.now }),
+        },
       },
-      refresh:
-        refresh ??
-        (async (refreshToken) => ({
-          accessToken: `${refreshToken.replace('refresh', 'access')}-renewed-${++refreshed}`,
-          accessTokenExpiresAt: clock.now + HOUR,
-          refreshToken: `${refreshToken}-${refreshed}`,
-        })),
-      readUser: (idToken) => readIdTokenUser(idToken, { clientId: TEST_CLIENT_ID, requiredTenantId: null, nowMs: clock.now }),
       now: () => clock.now,
     });
   }
 
-  async function signedInAsAnna(refresh?: AuthControllerDeps['refresh']) {
+  async function signedInAsAnna(refresh?: AuthProviderClient['refresh']) {
     const clock = { now: NOW_MS };
     const store = new MemoryStore();
     const controller = controllerFor([USER_A, USER_B], store, clock, refresh);
@@ -424,7 +428,7 @@ describe('a request never changes identity while it waits for its token', () => 
     };
   }
 
-  function trackedRefresh(calls: string[]): AuthControllerDeps['refresh'] {
+  function trackedRefresh(calls: string[]): AuthProviderClient['refresh'] {
     return async (refreshToken) => {
       calls.push(refreshToken);
       return {

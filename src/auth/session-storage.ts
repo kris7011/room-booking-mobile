@@ -9,7 +9,7 @@
 // some platforms reject values above about 2 KB, and Entra refresh tokens
 // can be longer, so the token is split into chunks.
 import { AuthFlowError } from './auth-errors';
-import type { AuthUser } from './id-token';
+import { AUTH_PROVIDER_IDS, type AuthProviderId, type AuthUser } from './id-token';
 
 /** The subset of SecureStore the session needs; keys use only [A-Za-z0-9._-]. */
 export interface KeyValueStore {
@@ -34,7 +34,11 @@ export const MAX_CHUNKS = 8;
 interface SessionMeta {
   version: 1;
   chunks: number;
-  user: AuthUser;
+  /**
+   * `provider` is absent in sessions saved before e-mail sign-in existed:
+   * those are Microsoft (Entra ID) sessions, so they keep working.
+   */
+  user: Omit<AuthUser, 'provider'> & { provider?: AuthProviderId };
 }
 
 /**
@@ -92,7 +96,7 @@ export async function loadSession(store: KeyValueStore): Promise<StoredSession |
   } catch {
     throw new AuthFlowError('storage', 'Could not read the session');
   }
-  return { refreshToken, user: meta.user };
+  return { refreshToken, user: { ...meta.user, provider: meta.user.provider ?? 'entra' } };
 }
 
 /** Deletes the metadata first, so a half-finished clear never loads as a session. */
@@ -125,7 +129,8 @@ async function readMeta(store: KeyValueStore): Promise<SessionMeta | null> {
       typeof user?.name === 'string' &&
       typeof user.tenantId === 'string' &&
       typeof user.objectId === 'string' &&
-      (user.username === null || typeof user.username === 'string');
+      (user.username === null || typeof user.username === 'string') &&
+      (user.provider === undefined || AUTH_PROVIDER_IDS.includes(user.provider));
     return valid ? (value as SessionMeta) : null;
   } catch {
     return null;

@@ -30,14 +30,18 @@ describe('an offline start', () => {
     const store = new MemoryStore();
     await saveSession(store, {
       refreshToken: 'fake-refresh-old',
-      user: { name: 'Søren', username: null, tenantId: TEST_TENANT_ID, objectId: TEST_OBJECT_ID },
+      user: { provider: 'entra', name: 'Søren', username: null, tenantId: TEST_TENANT_ID, objectId: TEST_OBJECT_ID },
     });
     const controller = AuthController.create({
       store,
-      authorize: async () => assert.fail('no interactive login'),
-      redeemCode: async () => assert.fail('no code'),
-      refresh: async () => Promise.reject(new AuthFlowError('network', 'offline')),
-      readUser: () => assert.fail('no ID token'),
+      providers: {
+        entra: {
+          authorize: async () => assert.fail('no interactive login'),
+          redeemCode: async () => assert.fail('no code'),
+          refresh: async () => Promise.reject(new AuthFlowError('network', 'offline')),
+          readUser: () => assert.fail('no ID token'),
+        },
+      },
     });
     setAccessTokenProvider(controller);
     const fetch = mock.method(globalThis, 'fetch', async () => assert.fail('nothing reaches the API'));

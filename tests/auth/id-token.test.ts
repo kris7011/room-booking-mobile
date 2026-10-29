@@ -41,6 +41,7 @@ describe('decoding', () => {
 describe('readIdTokenUser', () => {
   test('returns name, username and the stable identity (tid, oid)', () => {
     assert.deepEqual(readIdTokenUser(makeIdToken(), expected), {
+      provider: 'entra',
       name: 'Søren Ærø-Ågård',
       username: 'soren@contoso.example',
       tenantId: TEST_TENANT_ID,
@@ -79,6 +80,7 @@ describe('readIdTokenUser', () => {
       preferred_username: 'soren@outlook.example',
     });
     assert.deepEqual(readIdTokenUser(personal, expected), {
+      provider: 'entra',
       name: 'Søren Ærø-Ågård',
       username: 'soren@outlook.example',
       tenantId: PERSONAL_TENANT_ID,

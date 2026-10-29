@@ -56,9 +56,11 @@ than mocks alone.
   Microsoft accounts (Outlook.com, Hotmail) and work or school accounts:
   OAuth 2.0 authorization code flow with PKCE as a public client (no
   secret), refresh token in SecureStore, silent renewal
-  ([details](docs/entra-login.md)). Room Booking stores no passwords; an
-  e-mail one-time-code sign-in (Entra External ID) was planned but is not
-  implemented.
+  ([details](docs/entra-login.md)). Room Booking stores no passwords.
+- Optional e-mail sign-in with a one-time code through Microsoft Entra
+  External ID, next to Microsoft sign-in ([details](docs/external-id-login.md)):
+  implemented and unit-tested, **not yet run against Microsoft** (the
+  external tenant does not exist yet).
 - Organisations for signed-in users: choose the active organisation, create
   one, accept invitations; Owners and Admins manage rooms, members and
   invitations ([details](docs/organisations.md)).

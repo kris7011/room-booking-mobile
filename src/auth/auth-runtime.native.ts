@@ -7,12 +7,13 @@ import { AuthRequest, Prompt, ResponseType } from 'expo-auth-session';
 import { Platform } from 'react-native';
 
 import { setAccessTokenProvider } from '../api/http-client';
-import { AuthController, type AuthorizeResult } from './auth-controller';
+import { AuthController, type AuthorizeResult, type AuthProviderClient } from './auth-controller';
 import { AuthFlowError, oauthError } from './auth-errors';
-import { describeAuthAvailability, resolveAuthAvailability } from './auth-availability';
-import { buildAuthorizeRequest } from './authorize-request';
-import { entraConfigResult, type EntraConfig } from './entra-config';
-import { readIdTokenUser } from './id-token';
+import { describeAuthAvailability, describeExternalIdAvailability, resolveAuthAvailability } from './auth-availability';
+import { buildAuthorizeRequest, buildExternalIdAuthorizeRequest, type AuthorizeRequest } from './authorize-request';
+import { entraConfigResult } from './entra-config';
+import { externalIdConfigResult, type ExternalIdConfig } from './external-id-config';
+import { readExternalIdTokenUser, readIdTokenUser } from './id-token';
 import { getAuthRedirectUri } from './redirect-uri';
 import { secureSessionStore } from './secure-store.native';
 import { redeemAuthorizationCode, redeemRefreshToken, type TokenClientConfig } from './token-client';
@@ -33,40 +34,64 @@ function createController(): AuthController {
   if (!availability.available) return AuthController.unavailable(availability.reason, availability.detail);
 
   const { config, redirectUri } = availability;
-  const tokenConfig: TokenClientConfig = {
-    clientId: config.clientId,
-    tokenEndpoint: config.tokenEndpoint,
-    redirectUri,
-    scopes: config.scopes,
-    apiScope: config.apiScope,
-  };
+  const entra = providerClient(buildAuthorizeRequest(config, redirectUri), config.tokenEndpoint, config.apiScope, (idToken) =>
+    readIdTokenUser(idToken, { clientId: config.clientId, requiredTenantId: config.requiredTenantId, nowMs: Date.now() }),
+  );
+
+  // E-mail sign-in is an addition: a missing or broken External ID setting
+  // never takes Microsoft sign-in away.
+  if (__DEV__) console.info(describeExternalIdAvailability(externalIdConfigResult));
+  const externalId = externalIdConfigResult.configured ? externalIdClient(externalIdConfigResult.config, redirectUri) : undefined;
 
   const authController = AuthController.create({
     store: secureSessionStore,
-    authorize: () => authorize(config, redirectUri),
-    redeemCode: (code, codeVerifier) => redeemAuthorizationCode(tokenConfig, { code, codeVerifier }),
-    refresh: (refreshToken) => redeemRefreshToken(tokenConfig, refreshToken),
-    readUser: (idToken) =>
-      readIdTokenUser(idToken, { clientId: config.clientId, requiredTenantId: config.requiredTenantId, nowMs: Date.now() }),
+    providers: { entra, ...(externalId ? { 'external-id': externalId } : {}) },
   });
   // Every API request now gets its token from here.
   setAccessTokenProvider(authController);
   return authController;
 }
 
+function externalIdClient(config: ExternalIdConfig, redirectUri: string): AuthProviderClient {
+  return providerClient(buildExternalIdAuthorizeRequest(config, redirectUri), config.tokenEndpoint, config.apiScope, (idToken) =>
+    readExternalIdTokenUser(idToken, { clientId: config.clientId, tenantId: config.tenantId, issuer: config.issuer, nowMs: Date.now() }),
+  );
+}
+
+/** The browser login, the token endpoint and the ID-token check of one provider. */
+function providerClient(
+  request: AuthorizeRequest,
+  tokenEndpoint: string,
+  apiScope: string,
+  readUser: AuthProviderClient['readUser'],
+): AuthProviderClient {
+  const tokenConfig: TokenClientConfig = {
+    clientId: request.clientId,
+    tokenEndpoint,
+    redirectUri: request.redirectUri,
+    scopes: request.scopes,
+    apiScope,
+  };
+  return {
+    authorize: () => authorize(request),
+    redeemCode: (code, codeVerifier) => redeemAuthorizationCode(tokenConfig, { code, codeVerifier }),
+    refresh: (refreshToken) => redeemRefreshToken(tokenConfig, refreshToken),
+    readUser,
+  };
+}
+
 /**
- * Opens the Microsoft login in a Custom Tab (Android) or an
+ * Opens the provider's login page in a Custom Tab (Android) or an
  * ASWebAuthenticationSession (iOS) and waits for roombookingdev://auth.
  * AuthRequest creates the PKCE verifier and challenge (S256) and a random
  * state, and rejects a redirect whose state does not match.
  */
-async function authorize(config: EntraConfig, redirectUri: string): Promise<AuthorizeResult> {
-  const { authorizationEndpoint, ...options } = buildAuthorizeRequest(config, redirectUri);
+async function authorize(authorizeRequest: AuthorizeRequest): Promise<AuthorizeResult> {
+  const { authorizationEndpoint, prompt, ...options } = authorizeRequest;
   const request = new AuthRequest({
     ...options,
     responseType: ResponseType.Code,
-    // Let the user pick an account, also right after signing out.
-    prompt: Prompt.SelectAccount,
+    prompt: prompt === 'login' ? Prompt.Login : Prompt.SelectAccount,
   });
 
   const result = await request.promptAsync({ authorizationEndpoint });

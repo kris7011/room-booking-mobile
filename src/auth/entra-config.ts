@@ -97,16 +97,17 @@ export function resolveEntraConfig(raw: RawEntraSettings): EntraConfigResult {
   };
 }
 
-function checkApiScope(apiScope: string, clientId: string): string | null {
+/** Why `apiScope` cannot be the API's delegated scope, or null. `variable` names the setting in the message. */
+export function checkApiScope(apiScope: string, clientId: string, variable = 'EXPO_PUBLIC_ENTRA_API_SCOPE'): string | null {
   // api://<application ID URI>/<scope name>, or <API client ID>/<scope name>.
   const match = /^(api:\/\/\S+|[0-9a-f-]{36})\/([A-Za-z0-9._-]+)$/i.exec(apiScope);
   if (!match) {
-    return "EXPO_PUBLIC_ENTRA_API_SCOPE skal være API'ets fulde scope, fx api://<API'ets client ID>/access_as_user.";
+    return `${variable} skal være API'ets fulde scope, fx api://<API'ets client ID>/access_as_user.`;
   }
   // A scope of the mobile app's own registration gives a token whose
   // audience is the app, which the API must reject.
   if (match[1].toLowerCase().includes(clientId.toLowerCase())) {
-    return "EXPO_PUBLIC_ENTRA_API_SCOPE peger på mobilappens egen registrering. Brug scopet fra API'ets registrering.";
+    return `${variable} peger på mobilappens egen registrering. Brug scopet fra API'ets registrering.`;
   }
   return null;
 }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, mock, test } from 'node:test';
 import {
   ACCESS_TOKEN_RENEWAL_MARGIN_MS,
   AuthController,
-  type AuthControllerDeps,
+  type AuthProviderClient,
   type AuthorizeResult,
   type AuthState,
 } from '../../src/auth/auth-controller';
@@ -16,7 +16,7 @@ import { NOW_MS, TEST_CLIENT_ID, TEST_OBJECT_ID, TEST_TENANT_ID, makeIdToken } f
 import { MemoryStore, until } from '../support/memory-store';
 
 const HOUR = 60 * 60 * 1000;
-const storedUser = { name: 'Søren Ærø-Ågård', username: 'soren@contoso.example', tenantId: TEST_TENANT_ID, objectId: TEST_OBJECT_ID };
+const storedUser = { provider: 'entra' as const, name: 'Søren Ærø-Ågård', username: 'soren@contoso.example', tenantId: TEST_TENANT_ID, objectId: TEST_OBJECT_ID };
 
 /** A manually resolved promise, to control the order of async steps. */
 function deferred<T>() {
@@ -45,27 +45,31 @@ interface Fake {
   controller: AuthController;
   store: MemoryStore;
   states: AuthState[];
-  authorize: ReturnType<typeof mock.fn<AuthControllerDeps['authorize']>>;
-  redeemCode: ReturnType<typeof mock.fn<AuthControllerDeps['redeemCode']>>;
-  refresh: ReturnType<typeof mock.fn<AuthControllerDeps['refresh']>>;
+  authorize: ReturnType<typeof mock.fn<AuthProviderClient['authorize']>>;
+  redeemCode: ReturnType<typeof mock.fn<AuthProviderClient['redeemCode']>>;
+  refresh: ReturnType<typeof mock.fn<AuthProviderClient['refresh']>>;
 }
 
-function setup(options: Partial<Pick<AuthControllerDeps, 'authorize' | 'redeemCode' | 'refresh'>> & { store?: MemoryStore } = {}): Fake {
+function setup(options: Partial<Pick<AuthProviderClient, 'authorize' | 'redeemCode' | 'refresh'>> & { store?: MemoryStore } = {}): Fake {
   const store = options.store ?? new MemoryStore();
   // Code exchanges hand out fake-access-1, -2 …; refreshes fake-access-101, -102 …
   let issued = 0;
   let refreshed = 100;
-  const authorize = mock.fn<AuthControllerDeps['authorize']>(
+  const authorize = mock.fn<AuthProviderClient['authorize']>(
     options.authorize ?? (async (): Promise<AuthorizeResult> => ({ type: 'success', code: 'code-from-entra', codeVerifier: 'verifier-1' })),
   );
-  const redeemCode = mock.fn<AuthControllerDeps['redeemCode']>(options.redeemCode ?? (async () => tokens(++issued)));
-  const refresh = mock.fn<AuthControllerDeps['refresh']>(options.refresh ?? (async () => tokens(++refreshed)));
+  const redeemCode = mock.fn<AuthProviderClient['redeemCode']>(options.redeemCode ?? (async () => tokens(++issued)));
+  const refresh = mock.fn<AuthProviderClient['refresh']>(options.refresh ?? (async () => tokens(++refreshed)));
   const controller = AuthController.create({
     store,
-    authorize,
-    redeemCode,
-    refresh,
-    readUser: (idToken) => readIdTokenUser(idToken, { clientId: TEST_CLIENT_ID, requiredTenantId: null, nowMs: clock.now }),
+    providers: {
+      entra: {
+        authorize,
+        redeemCode,
+        refresh,
+        readUser: (idToken) => readIdTokenUser(idToken, { clientId: TEST_CLIENT_ID, requiredTenantId: null, nowMs: clock.now }),
+      },
+    },
     now: () => clock.now,
   });
   const states: AuthState[] = [];
@@ -264,7 +268,7 @@ describe('signIn', () => {
   // fails would otherwise show "signed out" while the old session still
   // handed out tokens and stayed stored for the next app start.
   test('while signed in, signIn does nothing: the session and what the app shows never disagree', async () => {
-    const secondLogins: AuthControllerDeps['authorize'][] = [
+    const secondLogins: AuthProviderClient['authorize'][] = [
       async () => ({ type: 'cancel' }),
       async () => Promise.reject(oauthError('access_denied', 'AADSTS65004: declined')),
     ];
