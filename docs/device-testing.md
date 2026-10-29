@@ -31,7 +31,9 @@ Each result says where it comes from:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Development build built (`expo run:android`), installed and started | Passed, 22 October; rebuilt after `e104927` and installed again, 26 October; **rebuilt from `main` `ccc8204`** (SDK 58 patches of PR #29) and installed as an update with the app's data kept, 28 October ([details](#rebuild-28-october-2026)) | PR #6; logged |
+| Development build built (`expo run:android`), installed and started | Passed, 22 October; rebuilt after `e104927` and installed again, 26 October; **rebuilt from `main` `ccc8204`** (SDK 58 patches of PR #29) and installed as an update with the app's data kept, 28 October ([details](#rebuild-28-october-2026)); **rebuilt from `main` `0c676e9`** (SDK 58 patches of PR #40), same signing certificate, installed as an update, 29 October ([details](#rebuild-29-october-2026)) | PR #6; logged |
+| [E-mail sign-in](external-id-login.md#results-29-october-2026) X1–X8 against a real External ID tenant | **Passed**, 29 October, isolated database copy | logged; on screen |
+| [Identity linking](identity-linking.md#results-29-october-2026) L1–L6 with real sign-ins | **Passed**, 29 October (L7 not run: no third login) | logged; on screen |
 | Metro logs `[auth] Redirect URI: roombookingdev://auth`; `adb` delivers that link to `.MainActivity` | Passed | PR #6 |
 | Sign-in configuration in the running development build: package `io.github.kris7011.roombooking.dev`, authority `/common/`, `roombookingdev://auth` registered as the redirect handler | **Passed**, 26 October | logged (`logcat`) |
 | A new interactive Microsoft sign-in with the personal account on `/common/`: the browser returns to the development build via `roombookingdev://auth` | **Passed**, 26 October | owner report. No `logcat` of this sign-in was captured |
@@ -457,6 +459,21 @@ first: if the only change is the two rewritten scripts,
 `git checkout -- package.json` reverts them. Do not run it in a checkout that had its own
 uncommitted `package.json` changes before the build, because it would discard
 them too; leave such a checkout as it is.
+
+### Rebuild, 29 October 2026
+
+| Item | Value |
+|---|---|
+| Source | `main` at `0c676e9` (PRs #40–#42) in the existing build worktree; `.env.local` kept, with the four `EXPO_PUBLIC_EXTERNAL_ID_*` values added (local only) |
+| Dependencies (`npm ci`, resolved) | `expo` 58.0.21, `expo-auth-session` 58.0.16, `expo-dev-client` 58.0.17, `expo-web-browser` 58.0.7, `expo-secure-store` 58.0.2, `react-native` 0.88.1, `react` 19.3.0 |
+| Toolchain | Node 24.15.0, JDK 17, Gradle 9.4.1 (wrapper) |
+| Build | `npx expo prebuild --platform android` (debug keystore unchanged, compared byte for byte), then `gradlew app:assembleDebug`: **BUILD SUCCESSFUL** in 4 min 28 s; APK 180,687,586 bytes, SHA-256 `dc7356ba…` |
+| Signing | SHA-256 `fac61745…033b9c` for both the installed APK and the new one (`apksigner verify --print-certs`) before installing |
+| Install | `adb install -r`: **Success**; first-install time still 23 October, so the app's data stayed. The stored Microsoft session was restored without a browser sign-in. The APK on the phone has the build's SHA-256 |
+
+Disk space for the build came from removing `node_modules` of finished,
+clean worktrees and `bin`/`obj` of finished backend worktrees (all
+regenerable); no source, database, backup or signing key was touched.
 
 ### Rebuild, 28 October 2026
 

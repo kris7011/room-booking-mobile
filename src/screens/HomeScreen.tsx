@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { userScopeKey } from '../api/current-user';
 import { roomBookingApi, roomBookingApiFor } from '../api/room-booking-api';
 import { useAuth } from '../auth/AuthProvider';
 import { chooseBookingArea } from '../bookings/booking-area-choice';
@@ -56,7 +57,8 @@ export function HomeScreen({ onOpenAdmin }: { onOpenAdmin: () => void }) {
 
           <AccountPanel />
 
-          <OrganizationPanel onOpenAdmin={onOpenAdmin} />
+          {/* Keyed by the user: a notice or open form of one user never shows to the next. */}
+          <OrganizationPanel key={userScopeKey(identity)} onOpenAdmin={onOpenAdmin} />
 
           {booking}
         </View>

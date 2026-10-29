@@ -9,8 +9,9 @@ e-mail address. The API's rules and the decision are in the backend's
 [API reference](https://github.com/kris7011/meeting-room-booking/blob/main/docs/api-reference.md#linking-a-second-sign-in-identity)
 and ADR 0009.
 
-**Status.** Implemented and covered by unit tests with fakes. **Not run with
-real sign-ins** yet ([device checklist](#device-checklist)).
+**Status.** Implemented, covered by unit tests with fakes, and **run with
+real sign-ins** on 29 October 2026: the owner's Microsoft account and an
+External ID e-mail login ([results](#results-29-october-2026)).
 
 ## How it works
 
@@ -52,5 +53,26 @@ Development build, local API with the linking change, isolated database copy.
 | L5 | Start again and pick a login that is already its own Room Booking user | *Det login er allerede en selvstændig Room Booking-konto …*; nothing linked |
 | L6 | Start again and close the browser page | *Login blev afbrudt. Intet blev tilknyttet.* |
 | L7 | Start again, then *Annuller* at the confirmation | *Intet blev tilknyttet.* |
+
+### Results, 29 October 2026
+
+Samsung development build (see the [e-mail results](external-id-login.md#results-29-october-2026)),
+API on isolated database copies restored from one verified backup: L5 on the
+copy where the e-mail login was already its own user, L1–L4 and L6 on a
+second copy where it was not.
+
+| # | Result | Evidence |
+| --- | --- | --- |
+| L1 | **Pass** | on screen |
+| L2 | **Pass**: proof with a code sent to the address, then *Vil du tilknytte … (e-mail-kode) til Room Booking-kontoen Kris Riisgaard Larsen?*. Before *Tilknyt*: the request claimed, not completed, no new identity | on screen; logged (database) |
+| L3 | **Pass**: *✓ Tilknyttet* with *Microsoft-konto (personlig)* and *E-mail-kode*; both identities on the one user, no new user | on screen; logged (database) |
+| L4 | **Pass**: e-mail sign-in shows the Microsoft user's ID, *Ejer* of Test ApS and Legacy; memberships unchanged | on screen; logged (database) |
+| L5 | **Pass**: the e-mail user tried to link the Microsoft account, which is its own user: *Det login er allerede en selvstændig Room Booking-konto …*; the request cancelled, identities and memberships unchanged | on screen; logged (database) |
+| L6 | **Pass**: *Login blev afbrudt. Intet blev tilknyttet.*; the request cancelled | on screen; logged (database) |
+| L7 | **Not run**: needs a third login that no user has, and none was available. The cancel path is covered by unit tests here and the API's integration tests | – |
+
+The first L2 attempt failed on Microsoft's page (*Koden fungerede ikke*,
+most likely an older code); it was closed, which cancelled that request,
+and repeated.
 
 There is no unlinking in the app or the API yet.

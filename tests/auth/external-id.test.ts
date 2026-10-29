@@ -167,6 +167,9 @@ describe('account texts', () => {
   test('the sign-in text mentions the e-mail code only when it is offered', () => {
     assert.doesNotMatch(describeSignInChoice(['entra'], false), /e-mail/);
     assert.match(describeSignInChoice(['entra', 'external-id'], false), /engangskode på e-mail/);
+    // Those addresses are Microsoft accounts on the e-mail page.
+    assert.match(describeSignInChoice(['entra', 'external-id'], false), /Hotmail-, Outlook- eller Live-adresse, så brug Log ind med Microsoft/);
+    assert.doesNotMatch(describeSignInChoice(['entra'], false), /Hotmail/);
     assert.match(describeSignInChoice(['entra', 'external-id'], true), /demoen/);
     assert.equal(SIGN_IN_LABELS.entra, 'Log ind med Microsoft');
     assert.equal(SIGN_IN_LABELS['external-id'], 'Log ind med e-mail-kode');

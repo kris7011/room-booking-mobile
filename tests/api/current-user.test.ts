@@ -8,6 +8,7 @@ import {
   describeOrganizationAccess,
   describeRole,
   registerCurrentUser,
+  userScopeKey,
   verifyAndRegister,
   type CurrentUserApi,
 } from '../../src/api/current-user';
@@ -182,5 +183,19 @@ describe('organisation access', () => {
       describeError,
     );
     assert.ok(result.status === 'rejected' && /deaktiveret/.test(result.message));
+  });
+});
+
+describe('userScopeKey', () => {
+  test("is the registered user's public ID, so another user gets fresh per-user state", () => {
+    const registered = (publicId: string) => {
+      const user = { ...USER, publicId };
+      return { status: 'registered', identity: { ...REGISTERED, user }, user, registeredNow: false } as const;
+    };
+
+    assert.equal(userScopeKey(registered('user-a')), 'user-user-a');
+    assert.notEqual(userScopeKey(registered('user-a')), userScopeKey(registered('user-b')));
+    assert.equal(userScopeKey(null), 'no-user');
+    assert.equal(userScopeKey({ status: 'checking' }), 'no-user');
   });
 });
