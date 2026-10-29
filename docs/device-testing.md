@@ -41,7 +41,7 @@ Each result says where it comes from:
 | Existing memberships (Legacy and Test ApS, role *Ejer*) shown after sign-in | **Passed**, 26 October | owner report; logged |
 | Signed-in booking in Test ApS: search, book, see it in *Kommende bookinger*, still there after restarting the app | **Passed**, 26 October | owner report. The booking was on screen during the checks below (logged, read only) |
 | [Organisation administration as Owner](#organisation-administration-checklist-26-october-2026) | **Passed**, 26 October; Admin, Member and invitee views not run | logged |
-| [Sole-Owner member list](#phase-5c-sole-owner-member-list) (PR #22, issue #20): no role chips or *Forlad organisationen* for the only Owner, and the explanation instead | **Passed**, 27 October (S1, S3, S5, S6); S2 not observable; S4 (TalkBack) not run | logged |
+| [Sole-Owner member list](#phase-5c-sole-owner-member-list) (PR #22, issue #20): no role chips or *Forlad organisationen* for the only Owner, and the explanation instead | **Passed**, 27 October (S1, S3, S5, S6); S2 not observable. S4 (TalkBack): **passed**, 29 October ([details](#phase-5c-s4-run-29-october-2026)) | S1, S3, S5, S6: logged. S4: owner report |
 | [Phase 5D checks](#phase-5d-manual-checks-for-the-owner) D1–D8: booking retry after a lost connection, organisation access refresh, revoked and disabled access | **Passed**, 27 October, on an isolated database copy | logged |
 | [Phase 5F checks](#phase-5f-manual-checks-for-the-owner) F1–F4: no request while restoring, disabled account shown as such, no CORS hint on Android, offline message once | **Passed**, 28 October, on the rebuilt build and an isolated database copy ([results](#phase-5f-f1f4)) | logged |
 | [Day strip](#day-strip-smoke-test-pr-36-28-october-2026) (PR #36, issue #34): initial day visible, a partly hidden day revealed when tapped (both edges), no jump back to an older selection, search uses the chosen day | **Passed**, 28 October, JavaScript from `1c99a25` on the rebuilt build, isolated database copy (read only). A smoke test, not proof that the web race exists on Android | logged |
@@ -160,7 +160,7 @@ of `describeSoleOwner` in
 | S1 | Signed in, *Aktiv organisation* Test ApS, tap *Administrer organisation* | The administration page opens; *Medlemmer* lists you with *(dig)* and the role *Ejer* | **Passed**, 27 October. Logged |
 | S2 | Look at your own row while the list is loading (often too fast to see; then record *not observable*) | No role chips and no *Forlad organisationen* while *Henter medlemmer…* shows | **Not observable**, 27 October: the list had loaded in the first capture after the tap |
 | S3 | Your own row after loading (you are the only member and the only Owner) | No role chips, no *Forlad organisationen*; the text *Du er den eneste ejer og det eneste medlem. Inviter en anden og gør vedkommende til ejer, før du kan ændre din egen rolle eller forlade organisationen.* | **Passed**, 27 October: the view hierarchy ends with that text, no chip or button after it. Logged |
-| S4 | TalkBack on, move to that text | TalkBack reads the explanation | Not run: needs the owner to listen |
+| S4 | TalkBack on, move to that text | TalkBack reads the explanation | **Passed**, 29 October: TalkBack read the whole explanation. Owner report ([details](#phase-5c-s4-run-29-october-2026)) |
 | S5 | Back to booking, switch to Legacy, open *Administrer organisation* | If you are Legacy's only Owner and it has other members: no chips and no *Forlad organisationen* on your row, the text *Du er den eneste ejer, så du kan ikke ændre din egen rolle…*, and the chips and *Fjern fra organisationen* still offered on the other members' rows (do not tap them). If you are the only member: as S3 | **Passed**, 27 October: you are Legacy's only member, so as S3. Logged |
 | S6 | Android back button, switch back to Test ApS | The booking page shows Test ApS's rooms and bookings, no Legacy data | **Passed**, 27 October: *Mødelokaler i Test ApS* with Testlokale 1 and 2, no Legacy room. Logged |
 
@@ -169,6 +169,27 @@ chips and *Forlad organisationen* on their own row), and the Admin and Member
 views of the list. These are covered by the unit tests in
 `tests/organizations/organization-rules.test.ts`; the API still refuses
 `last_owner` (backend `MemberManagementTests`).
+
+### Phase 5C S4 run, 29 October 2026
+
+Set-up (logged): the development build with JavaScript from `main`
+`3b6099b`, signed in with the owner's personal account, against an isolated
+database copy restored from a verified backup (the real development database
+was not used and its SHA-256 was unchanged). Test ApS was active, with the
+owner as its only member and only Owner. *Administrer organisation* was open
+and scrolled until the view hierarchy showed the `sole-owner-notice` text
+*Du er den eneste ejer og det eneste medlem. Inviter en anden og gør
+vedkommende til ejer, før du kan ændre din egen rolle eller forlade
+organisationen.* on screen.
+
+Result (**owner report**): with TalkBack on, the owner moved to the text and
+TalkBack read the whole explanation.
+
+What the PC recorded does not show this: it polled only whether TalkBack was
+switched on (07:32:13 UTC, Settings in front) and off (07:33:41 UTC,
+TalkBack's tutorial in front). Neither that log nor `adb` records what
+TalkBack says, so the result rests on the owner's report alone. The PC did
+not switch TalkBack on or off.
 
 ### Phase 5C: sign-in steps still open
 

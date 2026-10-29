@@ -52,7 +52,8 @@ still open.
 From [device-testing.md](device-testing.md), all on the Samsung development
 build unless noted:
 
-- Phase 5C S4 (TalkBack on the sole-Owner explanation); S2 was not observable.
+- Phase 5C S2 was not observable (S4, TalkBack on the sole-Owner explanation,
+  passed on 29 October by owner report).
 - Sign-in checklist steps 2, 3, 8, 12.
 - Work or school account; the first sign-in of a new, unregistered account.
 - Invitation link opened on the device; the time-handling checklist.
