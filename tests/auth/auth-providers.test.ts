@@ -186,3 +186,58 @@ describe('renewing and restoring', () => {
     assert.equal(await loadSession(store), null);
   });
 });
+
+describe('proving a second identity for linking', () => {
+  test('signs in with the other provider and leaves the session, its token and its storage alone', async () => {
+    const { controller, store, externalId } = setup();
+    await controller.start();
+    await controller.signIn('entra');
+    const before = controller.getState();
+    const stored = await loadSession(store);
+
+    const proof = await controller.proveIdentity('external-id');
+
+    assert.deepEqual(proof.user, emailUser);
+    assert.equal(proof.grant.accessToken, 'email-access');
+    assert.equal(proof.grant.isCurrent(), true);
+    assert.equal(externalId.authorize.mock.callCount(), 1);
+    assert.deepEqual(controller.getState(), before);
+    assert.equal(await controller.getAccessToken(), 'entra-access');
+    assert.deepEqual(await loadSession(store), stored);
+  });
+
+  test('needs someone signed in', async () => {
+    const { controller, externalId } = setup();
+    await controller.start();
+
+    await assert.rejects(controller.proveIdentity('external-id'), /Nobody is signed in/);
+    assert.equal(externalId.authorize.mock.callCount(), 0);
+  });
+
+  test('closing the page is a cancel, and the session is unchanged', async () => {
+    const { controller, externalId } = setup();
+    await controller.start();
+    await controller.signIn('entra');
+    externalId.authorize.mock.mockImplementation(async () => ({ type: 'cancel' }));
+
+    await assert.rejects(controller.proveIdentity('external-id'), (error: unknown) => error instanceof Error && /cancelled/.test(error.message));
+    assert.equal(controller.getState().status, 'signed-in');
+  });
+
+  test('a sign-out while the page is open voids the proof', async () => {
+    const { controller, externalId } = setup();
+    await controller.start();
+    await controller.signIn('entra');
+    let finish!: () => void;
+    externalId.authorize.mock.mockImplementation(
+      () => new Promise((resolve) => (finish = () => resolve({ type: 'success', code: 'c', codeVerifier: 'v' }))),
+    );
+
+    const proving = controller.proveIdentity('external-id');
+    await until(() => finish !== undefined, 'the login page to open');
+    await controller.signOut();
+    finish();
+
+    await assert.rejects(proving, (error: unknown) => error instanceof Error && /session/i.test(error.message));
+  });
+});

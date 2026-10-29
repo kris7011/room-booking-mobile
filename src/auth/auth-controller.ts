@@ -189,6 +189,33 @@ export class AuthController implements AccessTokenProvider {
   }
 
   /**
+   * Signs in with `provider` once more, only to prove control of a second
+   * identity for linking it (identity-link-flow.ts). The session stays as it
+   * is: nothing is stored, the state does not change, and the second
+   * identity's refresh token is dropped. The grant is valid only while the
+   * session that asked for it lasts. Throws AuthFlowError: 'cancelled' when
+   * the user closes the page, 'session-changed' when the session ended
+   * meanwhile.
+   */
+  async proveIdentity(provider: AuthProviderId): Promise<{ user: AuthUser; grant: AccessGrant }> {
+    const client = this.deps?.providers[provider];
+    if (!client || this.state.status !== 'signed-in') throw new AuthFlowError('session-changed', 'Nobody is signed in');
+    const generation = this.generation;
+    const ended = () => generation !== this.generation;
+
+    const result = await client.authorize();
+    if (ended()) throw sessionChanged();
+    if (result.type === 'cancel') throw new AuthFlowError('cancelled', 'cancelled');
+
+    const tokens = await client.redeemCode(result.code, result.codeVerifier);
+    const user = client.readUser(tokens.idToken);
+    if (user.provider !== provider) throw new AuthFlowError('invalid-response', 'ID token of another provider');
+    if (ended()) throw sessionChanged();
+
+    return { user, grant: { accessToken: tokens.accessToken, isCurrent: () => !ended() } };
+  }
+
+  /**
    * Ends the session on this device: forgets the tokens and deletes the
    * stored refresh token. The Microsoft session in the browser is kept;
    * the next login offers an account picker (prompt=select_account).

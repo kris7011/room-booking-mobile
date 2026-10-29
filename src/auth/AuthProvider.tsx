@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 
+import type { AccessGrant } from '../api/http-client';
 import type { AuthController, AuthState } from './auth-controller';
 import { getAuthController } from './auth-runtime';
-import type { AuthProviderId } from './id-token';
+import type { AuthProviderId, AuthUser } from './id-token';
 
 const AuthContext = createContext<AuthController | null>(null);
 
@@ -21,6 +22,8 @@ export interface UseAuth {
   providers: readonly AuthProviderId[];
   signIn(provider?: AuthProviderId): void;
   signOut(): void;
+  /** A second sign-in that leaves the session alone, for linking an identity (AuthController.proveIdentity). */
+  proveIdentity(provider: AuthProviderId): Promise<{ user: AuthUser; grant: AccessGrant }>;
 }
 
 /** The login state (without tokens) and the actions. Re-renders when the state changes. */
@@ -33,5 +36,6 @@ export function useAuth(): UseAuth {
     providers: controller.getProviders(),
     signIn: (provider) => void controller.signIn(provider),
     signOut: () => void controller.signOut(),
+    proveIdentity: (provider) => controller.proveIdentity(provider),
   };
 }
