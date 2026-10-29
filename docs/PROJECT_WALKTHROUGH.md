@@ -156,7 +156,8 @@ sequenceDiagram
   token); the session records its provider and is renewed by it. Sessions
   stored before this change have no provider and load as Microsoft
   sessions. The e-mail page is opened with `prompt=login`. **[Tested]** with
-  fakes; **not run against Microsoft** (no external tenant yet). Details:
+  fakes; **[Manual]** against a real external tenant on the Samsung, X1–X8
+  passed on 29 October 2026. Details:
   [external-id-login.md](external-id-login.md),
   [ADR 0005](adr/0005-email-sign-in-through-external-id.md).
 - **Linking a second login.** `AuthController.proveIdentity` signs in with a
@@ -164,7 +165,8 @@ sequenceDiagram
   with the session, claims the API's one-time code with the second login's
   access token (`requestJson`'s `grant` option), and links only after the
   user confirms. Never by e-mail; an existing user is never merged.
-  **[Tested]** with fakes; not run with real sign-ins.
+  **[Tested]** with fakes; **[Manual]** with real sign-ins, L1–L6 passed on
+  29 October 2026 (L7 not run).
   Details: [identity-linking.md](identity-linking.md).
 
 ## 5. Calling the API
@@ -338,7 +340,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 
 | Layer | What | Status |
 | --- | --- | --- |
-| Unit/integration (`npm test`) | Auth controller (both sign-in providers), External ID settings and ID token, token client, ID token, session storage, HTTP client (auth, transport, errors, access-changed signal), API clients against a mocked `fetch` that copies the backend contract, organisation controller (incl. access synchronisation) and rules, booking submission and retries, date/time and search logic, plus Git ignore-behaviour tests | 505 tests passed on 2026-10-29 locally with identity linking (flow, API client with the second login's token, `proveIdentity`: +18), on `main` after PR #41. Before it: 487 tests passed on 2026-10-29 locally with e-mail sign-in (External ID settings, request, ID token, providers in the controller and storage, account texts: +24), on `main` after PR #40. Before it: 463 tests passed on 2026-10-28 in CI and locally on PR #37 (booking privacy, `bookingListText`, +5). Before it: 458 tests passed on 2026-10-28 in CI and locally on PR #32's final head `e380cd4` (its tree is `main` after the Phase 5F merges); 447 after #30 and 452 after #31 on the way there, 439 on `main` before them ([merge record](release-readiness.md#6-phase-5f-merge-and-verification)). Earlier that day, 458 on a local merge of the three fix branches (447, 444 and 445 with each alone). Before that: 439 tests passed on 2026-10-27 with Phase 5D PRs B and C combined, locally on PR #27 after merging `main` with PR #26 (407 with B alone, 397 with C alone; 365 on `main` `7db55b7` before them) |
+| Unit/integration (`npm test`) | Auth controller (both sign-in providers), External ID settings and ID token, token client, ID token, session storage, HTTP client (auth, transport, errors, access-changed signal), API clients against a mocked `fetch` that copies the backend contract, organisation controller (incl. access synchronisation) and rules, booking submission and retries, date/time and search logic, plus Git ignore-behaviour tests | 506 tests passed on 2026-10-29 locally after the device run (per-user key of the organisation panel: +1; the Hotmail hint and the invitation message extended existing tests). Before: 505 with identity linking (flow, API client with the second login's token, `proveIdentity`: +18), on `main` after PR #41. Before it: 487 tests passed on 2026-10-29 locally with e-mail sign-in (External ID settings, request, ID token, providers in the controller and storage, account texts: +24), on `main` after PR #40. Before it: 463 tests passed on 2026-10-28 in CI and locally on PR #37 (booking privacy, `bookingListText`, +5). Before it: 458 tests passed on 2026-10-28 in CI and locally on PR #32's final head `e380cd4` (its tree is `main` after the Phase 5F merges); 447 after #30 and 452 after #31 on the way there, 439 on `main` before them ([merge record](release-readiness.md#6-phase-5f-merge-and-verification)). Earlier that day, 458 on a local merge of the three fix branches (447, 444 and 445 with each alone). Before that: 439 tests passed on 2026-10-27 with Phase 5D PRs B and C combined, locally on PR #27 after merging `main` with PR #26 (407 with B alone, 397 with C alone; 365 on `main` `7db55b7` before them) |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32) |
 | Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32); in Phase 5B (2026-10-26) a deliberate unused variable made it exit 1 |
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 38 tests passed on 2026-10-28 on PR #37, on its first attempt against backend `main` before (`91349f0`) and after (`96c92e1`) the booking-privacy change. Before it: 38 tests passed on 2026-10-28 on the issue #34 fix (PR #36, code at `1c99a25`), locally and in CI on the first attempt, against backend `main` `91349f0`; the new test chooses a day before the day strip has reported its layout. Before it: 37 tests passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32), against backend `main` `91349f0`. Earlier: 37 on 2026-10-27 locally on PR #27 after merging `main`, against backend `main` `91349f0` (PR #18 merged; `E2E_BACKEND_DIR`, temporary SQLite file); 34 before PR #26 added `booking-retry.spec.ts` |
@@ -465,12 +467,11 @@ sign-out and new sign-in, and SecureStore contents before and after sign-out
 - **No sign-in in this app's web build**, by decision: it uses the API's
   anonymous demo mode. The Angular client in the backend repository has its
   own Microsoft sign-in (backend ADR 0007).
-- **E-mail one-time-code sign-in (Entra External ID) has not met Microsoft
-  yet.** It is implemented and unit-tested, but no external tenant exists,
-  so the real pages, tokens and claims are unverified
-  ([checklist](external-id-login.md#device-checklist)). Until the API's
-  e-mail check is turned on, an e-mail user cannot accept invitations. The
-  app and API store no passwords.
+- **E-mail users cannot accept invitations**: the API has no supported,
+  free way to verify their address ([why](https://github.com/kris7011/meeting-room-booking/blob/main/docs/external-id-setup.md#e-mail-addresses)).
+  Addresses that are also personal Microsoft accounts cannot sign up from
+  Microsoft's sign-in page ([details](external-id-login.md#results-29-october-2026)).
+  The app and API store no passwords.
 - **iOS has never been built or tested.**
 - **Signed-in flows are not tested end to end**; they rely on unit tests with
   fakes and manual device checks.

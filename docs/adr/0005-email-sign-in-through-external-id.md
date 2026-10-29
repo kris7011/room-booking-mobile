@@ -1,7 +1,7 @@
 # ADR 0005: E-mail sign-in through Microsoft Entra External ID
 
-- **Status:** Accepted. Implemented and unit-tested; **not yet run against
-  a real external tenant** ([checklist](../external-id-login.md#device-checklist)).
+- **Status:** Accepted. Implemented, unit-tested and run against a real
+  external tenant on 29 October 2026 ([results](../external-id-login.md#results-29-october-2026)).
 - **Code:** `src/auth/external-id-config.ts`, `authorize-request.ts`,
   `id-token.ts`, `auth-controller.ts`, `auth-runtime.native.ts`,
   `session-storage.ts`, `components/AccountPanel.tsx`

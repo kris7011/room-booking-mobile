@@ -59,12 +59,13 @@ than mocks alone.
   ([details](docs/entra-login.md)). Room Booking stores no passwords.
 - Optional e-mail sign-in with a one-time code through Microsoft Entra
   External ID, next to Microsoft sign-in ([details](docs/external-id-login.md)):
-  implemented and unit-tested, **not yet run against Microsoft** (the
-  external tenant does not exist yet).
+  implemented, unit-tested and **run against a real external tenant** on the
+  Samsung development build. E-mail users cannot accept invitations (no
+  verified address).
 - Linking a second login (another Microsoft account, or the e-mail code) to
   the same user, only after signing in with it and confirming; never by
-  e-mail ([details](docs/identity-linking.md)). Unit-tested; not yet run
-  with real sign-ins.
+  e-mail ([details](docs/identity-linking.md)). Unit-tested and run with
+  real sign-ins (L1–L6); no unlinking.
 - Organisations for signed-in users: choose the active organisation, create
   one, accept invitations; Owners and Admins manage rooms, members and
   invitations ([details](docs/organisations.md)).
@@ -87,7 +88,7 @@ The user interface is in Danish; code and documentation are in English.
 | Microsoft Entra sign-in | Android/iOS only | Unit tests with fakes for the browser, Entra and SecureStore | Samsung development build, 26 Oct 2026: `/common/` authority and redirect handler configured, personal-account session restored after a restart (logged); sign-out and a new interactive sign-in (owner report). 28 Oct 2026, on the rebuilt build: sign-out and a new sign-in, SecureStore holds only ciphertext and no auth entry after sign-out, no tokens in the recorded logs (logged; account picker by owner report). Work or school account not tried |
 | Organisations and administration | Yes, for signed-in users | Unit tests; role rules enforced and tested in the API | Samsung, 26 Oct 2026: Owner screens and actions (writes on an isolated database copy). Admin and Member views not tried (one account only). 27 Oct 2026: sole-Owner member list (PR #22), booking retry after a lost connection (PR #26) and organisation access refresh (PR #27) on an isolated copy (logged) |
 | Switching between a local and a hosted API | Development builds only ([details](docs/api-targets.md)) | Script smoke test in CI | Windows PowerShell 5.1 on an isolated copy |
-| Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified; rebuilt after the Expo patch update of 26 Oct 2026, and again from `main` with the SDK 58 patches of PR #29 on 28 Oct 2026 (installed as an update, app data kept). The Phase 5F fixes (PRs #30–#32) passed on that build ([F1–F4](docs/device-testing.md#phase-5f-f1f4), logged) |
+| Android development build | Yes | `app.json` and generated manifest checked in tests | Built and installed on a Samsung SM-A057G; deep link verified; rebuilt after the Expo patch update of 26 Oct 2026, from `main` with the SDK 58 patches of PR #29 on 28 Oct 2026, and from `main` `0c676e9` (SDK 58 patches of PR #40) on 29 Oct 2026, each installed as an update with the app data kept. The Phase 5F fixes (PRs #30–#32) passed on that build ([F1–F4](docs/device-testing.md#phase-5f-f1f4), logged) |
 | iOS | Shared code only | – | Never built |
 | Release builds and store distribution | No | – | – |
 
