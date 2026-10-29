@@ -1,20 +1,25 @@
+import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { sessionWarningToShow, type ServerIdentity } from '../api/current-user';
 import type { RegisteredUser } from '../models/current-user';
+import { describeAccount, describeSignInChoice, SIGN_IN_LABELS } from '../auth/account-description';
 import { describeUnavailable } from '../auth/auth-availability';
 import { useAuth } from '../auth/AuthProvider';
-import { isPersonalAccountTenant } from '../auth/entra-config';
+import type { AuthProviderId } from '../auth/id-token';
 import { apiBaseUrl, isDemoMode } from '../config/env';
 import { useSession } from '../organizations/SessionProvider';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { PrimaryButton } from './PrimaryButton';
 
-// Login status and the Microsoft login/logout button. The organisations the
-// user belongs to are shown by the OrganizationPanel below it.
+// Login status, the login buttons (Microsoft, and e-mail code when it is
+// configured) and logout. The organisations the user belongs to are shown by
+// the OrganizationPanel below it.
 export function AccountPanel() {
-  const { state, signIn, signOut } = useAuth();
+  const { state, providers, signIn, signOut } = useAuth();
   const { identity, recheckIdentity: recheck } = useSession();
+  // Which button started the running login, so only that one spins.
+  const [chosen, setChosen] = useState<AuthProviderId>('entra');
 
   if (state.status === 'unavailable') {
     return (
@@ -37,11 +42,7 @@ export function AccountPanel() {
     const warning = sessionWarningToShow(state.warning, identity);
     return (
       <View style={styles.panel} testID="account-panel">
-        <Text style={styles.label}>
-          {isPersonalAccountTenant(state.user.tenantId)
-            ? 'Logget ind med en personlig Microsoft-konto'
-            : 'Logget ind med en Microsoft arbejds- eller skolekonto'}
-        </Text>
+        <Text style={styles.label}>{describeAccount(state.user)}</Text>
         <Text style={styles.name}>{state.user.name}</Text>
         {state.user.username ? <Text style={styles.caption}>{state.user.username}</Text> : null}
         <ServerIdentityLine identity={identity} onRetry={recheck} />
@@ -60,11 +61,7 @@ export function AccountPanel() {
   return (
     <View style={styles.panel} testID="account-panel">
       <Text style={styles.label}>Ikke logget ind</Text>
-      <Text style={styles.caption}>
-        {isDemoMode
-          ? 'Du kan bruge demoen uden login. Log ind for at afprøve Microsoft-login på telefonen.'
-          : 'Log ind med Microsoft for at se og booke i din organisations mødelokaler.'}
-      </Text>
+      <Text style={styles.caption}>{describeSignInChoice(providers, isDemoMode)}</Text>
       {notice ? (
         <Text
           style={[styles.caption, notice.kind === 'error' ? styles.error : null]}
@@ -74,7 +71,19 @@ export function AccountPanel() {
           {notice.message}
         </Text>
       ) : null}
-      <PrimaryButton label="Log ind med Microsoft" onPress={signIn} loading={state.status === 'signing-in'} />
+      {providers.map((provider, index) => (
+        <PrimaryButton
+          key={provider}
+          label={SIGN_IN_LABELS[provider]}
+          variant={index === 0 ? 'primary' : 'secondary'}
+          onPress={() => {
+            setChosen(provider);
+            signIn(provider);
+          }}
+          loading={state.status === 'signing-in' && chosen === provider}
+          disabled={state.status === 'signing-in'}
+        />
+      ))}
     </View>
   );
 }

@@ -19,6 +19,7 @@ describe('buildAuthorizeRequest', () => {
       redirectUri: 'roombookingdev://auth',
       scopes: ['openid', 'profile', 'offline_access', TEST_API_SCOPE],
       usePKCE: true,
+      prompt: 'select_account',
       extraParams: {},
     });
   });

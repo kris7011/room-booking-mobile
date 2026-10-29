@@ -4,7 +4,9 @@ How the app signs users in with Microsoft Entra ID, how to configure it, the
 manual steps in the Entra admin center, and how to troubleshoot it. The
 design decision is recorded in
 [ADR 0001](adr/0001-native-sign-in-and-token-storage.md); device test steps
-are in [device-testing.md](device-testing.md).
+are in [device-testing.md](device-testing.md). E-mail sign-in with a
+one-time code (Entra External ID) is the second, optional provider:
+[external-id-login.md](external-id-login.md).
 
 **Status:** implemented and covered by automated tests with fakes for the
 browser, Entra's token endpoint and SecureStore. On 26 October 2026 a

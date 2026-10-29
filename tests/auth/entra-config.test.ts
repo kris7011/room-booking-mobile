@@ -127,7 +127,13 @@ describe('no secrets in the app', () => {
   });
 
   test('the example settings and the source contain no client secret', () => {
-    const files = ['.env.example', 'src/auth/entra-config.ts', 'src/auth/token-client.ts', 'src/auth/auth-runtime.native.ts'];
+    const files = [
+      '.env.example',
+      'src/auth/entra-config.ts',
+      'src/auth/external-id-config.ts',
+      'src/auth/token-client.ts',
+      'src/auth/auth-runtime.native.ts',
+    ];
     for (const file of files) {
       const text = readFileSync(resolve(projectRoot, file), 'utf8');
       assert.doesNotMatch(text, /client_secret\s*[:=]|clientSecret\s*[:=]|ENTRA_CLIENT_SECRET/i, file);

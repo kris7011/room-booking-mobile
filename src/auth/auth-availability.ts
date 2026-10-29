@@ -4,6 +4,7 @@
 import type { AuthUnavailableReason } from './auth-controller';
 import { NATIVE_REDIRECT_URI } from './auth-config';
 import { describeAccountTypes, type EntraConfig, type EntraConfigResult } from './entra-config';
+import type { ExternalIdConfigResult } from './external-id-config';
 
 export type AuthAvailability =
   | { available: true; config: EntraConfig; redirectUri: string }
@@ -48,6 +49,17 @@ export function describeAuthAvailability(availability: AuthAvailability): string
   }
   const { config } = availability;
   return `[auth] Microsoft login: ${config.authorizationEndpoint} (${describeAccountTypes(config.tenant)})`;
+}
+
+/**
+ * One line for the development log about e-mail sign-in: the authorize
+ * endpoint it opens, or why it is not offered. No client ID or token.
+ */
+export function describeExternalIdAvailability(result: ExternalIdConfigResult): string {
+  if (result.configured) return `[auth] E-mail one-time-code login: ${result.config.authorizationEndpoint}`;
+  return result.problem
+    ? `[auth] E-mail one-time-code login unavailable: ${result.problem}`
+    : '[auth] E-mail one-time-code login not configured';
 }
 
 /** Why login is not offered, for the account panel. */

@@ -13,3 +13,4 @@ README, not from notes written at the time.
 | [0002](0002-api-target-and-token-transport.md) | API chosen at bundle time; token transport enforced in the app | Accepted (PR #9 merged) |
 | [0003](0003-safe-booking-retries.md) | Safe booking retries with an Idempotency-Key per booking operation | Accepted (PR #26 merged) |
 | [0004](0004-organization-access-sync.md) | Synchronise organisation access at lifecycle moments, not by polling | Accepted (PR #27 merged) |
+| [0005](0005-email-sign-in-through-external-id.md) | E-mail sign-in through Entra External ID: one session, provider stored with it | Accepted; not yet run against a real external tenant |

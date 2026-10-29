@@ -6,7 +6,7 @@
 // the secure storage are passed in, so the whole flow runs in the Node tests.
 import type { AccessGrant, AccessTokenProvider } from '../api/http-client';
 import { AuthFlowError, describeAuthError, isAuthFlowError } from './auth-errors';
-import type { AuthUser } from './id-token';
+import { AUTH_PROVIDER_IDS, type AuthProviderId, type AuthUser } from './id-token';
 import { clearSession, loadSession, saveSession, type KeyValueStore } from './session-storage';
 import type { TokenSet } from './token-client';
 
@@ -33,14 +33,20 @@ export interface AuthNotice {
 /** Result of the interactive part: the browser login and redirect back to the app. */
 export type AuthorizeResult = { type: 'success'; code: string; codeVerifier: string } | { type: 'cancel' };
 
-export interface AuthControllerDeps {
-  store: KeyValueStore;
-  /** Opens the Microsoft login and returns the authorization code. Throws AuthFlowError. */
+/** One way to sign in: its browser login, its token endpoint and its ID-token rules. */
+export interface AuthProviderClient {
+  /** Opens the provider's login page and returns the authorization code. Throws AuthFlowError. */
   authorize(): Promise<AuthorizeResult>;
   redeemCode(code: string, codeVerifier: string): Promise<TokenSet>;
   refresh(refreshToken: string): Promise<TokenSet>;
   /** Validates the ID token's claims (see id-token.ts). Throws AuthFlowError. */
   readUser(idToken: string | undefined): AuthUser;
+}
+
+export interface AuthControllerDeps {
+  store: KeyValueStore;
+  /** Microsoft sign-in always; e-mail one-time code (External ID) only when configured. */
+  providers: { entra: AuthProviderClient } & Partial<Record<AuthProviderId, AuthProviderClient>>;
   now?: () => number;
 }
 
@@ -87,6 +93,10 @@ export class AuthController implements AccessTokenProvider {
 
   getState = (): AuthState => this.state;
 
+  /** The ways to sign in on this device, Microsoft first. Empty when login is unavailable. */
+  getProviders = (): readonly AuthProviderId[] =>
+    this.deps ? AUTH_PROVIDER_IDS.filter((provider) => this.deps?.providers[provider] !== undefined) : [];
+
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -113,6 +123,16 @@ export class AuthController implements AccessTokenProvider {
       this.setState({ status: 'signed-out' });
       return;
     }
+    // Saved by a build that offered e-mail sign-in, which this one does not:
+    // nobody could renew it.
+    if (!this.deps.providers[stored.user.provider]) {
+      this.setState({
+        status: 'signed-out',
+        notice: { kind: 'info', message: 'Login med e-mail-kode er ikke sat op i denne udgave af appen. Log ind igen.' },
+      });
+      await this.enqueueStorage(() => clearSession(this.requireDeps().store)).catch(() => undefined);
+      return;
+    }
 
     this.session = { user: stored.user, refreshToken: stored.refreshToken, accessTokenExpiresAt: 0 };
     this.setState({ status: 'signed-in', user: stored.user });
@@ -123,27 +143,29 @@ export class AuthController implements AccessTokenProvider {
   }
 
   /**
-   * Opens the Microsoft login. Does nothing while a login is open or someone
-   * is signed in: another account signs in after signOut(). Otherwise a
-   * cancelled or failed second login would show "signed out" while the
-   * first session still handed out tokens and stayed stored.
+   * Opens the login page of `provider` (Microsoft unless the user chose an
+   * e-mail code). Does nothing while a login is open or someone is signed
+   * in: another account signs in after signOut(). Otherwise a cancelled or
+   * failed second login would show "signed out" while the first session
+   * still handed out tokens and stayed stored.
    */
-  async signIn(): Promise<void> {
-    const deps = this.deps;
-    if (!deps || this.state.status === 'signing-in' || this.state.status === 'signed-in') return;
+  async signIn(provider: AuthProviderId = 'entra'): Promise<void> {
+    const client = this.deps?.providers[provider];
+    if (!client || this.state.status === 'signing-in' || this.state.status === 'signed-in') return;
     const generation = ++this.generation;
     this.setState({ status: 'signing-in' });
 
     try {
-      const result = await deps.authorize();
+      const result = await client.authorize();
       if (generation !== this.generation) return;
       if (result.type === 'cancel') {
         this.setState({ status: 'signed-out', notice: { kind: 'info', message: describeAuthError(new AuthFlowError('cancelled', 'cancelled')) } });
         return;
       }
 
-      const tokens = await deps.redeemCode(result.code, result.codeVerifier);
-      const user = deps.readUser(tokens.idToken);
+      const tokens = await client.redeemCode(result.code, result.codeVerifier);
+      const user = client.readUser(tokens.idToken);
+      if (user.provider !== provider) throw new AuthFlowError('invalid-response', 'ID token of another provider');
       if (generation !== this.generation) return;
 
       this.session = {
@@ -248,9 +270,9 @@ export class AuthController implements AccessTokenProvider {
   }
 
   private async renew(generation: number, session: LiveSession): Promise<string | null> {
-    const deps = this.requireDeps();
+    const client = this.requireDeps().providers[session.user.provider];
 
-    if (!session.refreshToken) {
+    if (!session.refreshToken || !client) {
       this.expire(generation);
       throw new AuthFlowError('session-expired', 'No refresh token');
     }
@@ -258,8 +280,12 @@ export class AuthController implements AccessTokenProvider {
     let tokens: TokenSet;
     let user = session.user;
     try {
-      tokens = await deps.refresh(session.refreshToken);
-      if (tokens.idToken) user = deps.readUser(tokens.idToken);
+      tokens = await client.refresh(session.refreshToken);
+      if (tokens.idToken) user = client.readUser(tokens.idToken);
+      // A renewal never changes who is signed in.
+      if (user.provider !== session.user.provider || user.objectId !== session.user.objectId || user.tenantId !== session.user.tenantId) {
+        throw new AuthFlowError('session-expired', 'The renewed tokens belong to another user');
+      }
     } catch (error) {
       if (generation !== this.generation) throw error;
       if (isAuthFlowError(error, 'session-expired') || isAuthFlowError(error, 'access-denied')) {

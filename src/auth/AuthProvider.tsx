@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useSyncExternalStore, type ReactN
 
 import type { AuthController, AuthState } from './auth-controller';
 import { getAuthController } from './auth-runtime';
+import type { AuthProviderId } from './id-token';
 
 const AuthContext = createContext<AuthController | null>(null);
 
@@ -16,7 +17,9 @@ export function AuthProvider({ children, controller = getAuthController() }: { c
 
 export interface UseAuth {
   state: AuthState;
-  signIn(): void;
+  /** The ways to sign in on this device: 'entra', and 'external-id' when configured. */
+  providers: readonly AuthProviderId[];
+  signIn(provider?: AuthProviderId): void;
   signOut(): void;
 }
 
@@ -27,7 +30,8 @@ export function useAuth(): UseAuth {
   const state = useSyncExternalStore(controller.subscribe, controller.getState, controller.getState);
   return {
     state,
-    signIn: () => void controller.signIn(),
+    providers: controller.getProviders(),
+    signIn: (provider) => void controller.signIn(provider),
     signOut: () => void controller.signOut(),
   };
 }

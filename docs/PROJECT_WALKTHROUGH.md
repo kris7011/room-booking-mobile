@@ -149,6 +149,16 @@ sequenceDiagram
 - **Availability.** Sign-in is off on web and in Expo Go, because the
   redirect `roombookingdev://auth` only reaches the development build
   (`auth-availability.ts`).
+- **Two providers, one session.** Microsoft (`entra`) is always offered;
+  e-mail with a one-time code through Entra External ID (`external-id`) only
+  when its four `EXPO_PUBLIC_EXTERNAL_ID_*` settings are valid. Each provider
+  is an `AuthProviderClient` (authorize, redeem, refresh, read the ID
+  token); the session records its provider and is renewed by it. Sessions
+  stored before this change have no provider and load as Microsoft
+  sessions. The e-mail page is opened with `prompt=login`. **[Tested]** with
+  fakes; **not run against Microsoft** (no external tenant yet). Details:
+  [external-id-login.md](external-id-login.md),
+  [ADR 0005](adr/0005-email-sign-in-through-external-id.md).
 
 ## 5. Calling the API
 
@@ -321,7 +331,7 @@ Code: [`organization-controller.ts`](../src/organizations/organization-controlle
 
 | Layer | What | Status |
 | --- | --- | --- |
-| Unit/integration (`npm test`) | Auth controller, token client, ID token, session storage, HTTP client (auth, transport, errors, access-changed signal), API clients against a mocked `fetch` that copies the backend contract, organisation controller (incl. access synchronisation) and rules, booking submission and retries, date/time and search logic, plus Git ignore-behaviour tests | 463 tests passed on 2026-10-28 in CI and locally on PR #37 (booking privacy, `bookingListText`, +5). Before it: 458 tests passed on 2026-10-28 in CI and locally on PR #32's final head `e380cd4` (its tree is `main` after the Phase 5F merges); 447 after #30 and 452 after #31 on the way there, 439 on `main` before them ([merge record](release-readiness.md#6-phase-5f-merge-and-verification)). Earlier that day, 458 on a local merge of the three fix branches (447, 444 and 445 with each alone). Before that: 439 tests passed on 2026-10-27 with Phase 5D PRs B and C combined, locally on PR #27 after merging `main` with PR #26 (407 with B alone, 397 with C alone; 365 on `main` `7db55b7` before them) |
+| Unit/integration (`npm test`) | Auth controller (both sign-in providers), External ID settings and ID token, token client, ID token, session storage, HTTP client (auth, transport, errors, access-changed signal), API clients against a mocked `fetch` that copies the backend contract, organisation controller (incl. access synchronisation) and rules, booking submission and retries, date/time and search logic, plus Git ignore-behaviour tests | 487 tests passed on 2026-10-29 locally with e-mail sign-in (External ID settings, request, ID token, providers in the controller and storage, account texts: +24), on `main` after PR #40. Before it: 463 tests passed on 2026-10-28 in CI and locally on PR #37 (booking privacy, `bookingListText`, +5). Before it: 458 tests passed on 2026-10-28 in CI and locally on PR #32's final head `e380cd4` (its tree is `main` after the Phase 5F merges); 447 after #30 and 452 after #31 on the way there, 439 on `main` before them ([merge record](release-readiness.md#6-phase-5f-merge-and-verification)). Earlier that day, 458 on a local merge of the three fix branches (447, 444 and 445 with each alone). Before that: 439 tests passed on 2026-10-27 with Phase 5D PRs B and C combined, locally on PR #27 after merging `main` with PR #26 (407 with B alone, 397 with C alone; 365 on `main` `7db55b7` before them) |
 | Type checking (`npm run typecheck`) | App, tests and E2E code under strict TypeScript | Passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32) |
 | Lint (`npm run lint`) | ESLint with Expo's SDK 58 config over app, tests and E2E code; `--max-warnings 0`, so a warning fails CI | Passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32); in Phase 5B (2026-10-26) a deliberate unused variable made it exit 1 |
 | E2E (`npm run test:e2e`) | Web build in Chromium against the real .NET API on a temporary SQLite database: rooms, search, booking, overlap (409), API errors, time handling, sign-in-required message, a booking answer dropped after the API saved it and the safe retry (`booking-retry.spec.ts`) | 38 tests passed on 2026-10-28 on PR #37, on its first attempt against backend `main` before (`91349f0`) and after (`96c92e1`) the booking-privacy change. Before it: 38 tests passed on 2026-10-28 on the issue #34 fix (PR #36, code at `1c99a25`), locally and in CI on the first attempt, against backend `main` `91349f0`; the new test chooses a day before the day strip has reported its layout. Before it: 37 tests passed on 2026-10-28 in CI and locally on each Phase 5F PR before its merge, last on `e380cd4` (PR #32), against backend `main` `91349f0`. Earlier: 37 on 2026-10-27 locally on PR #27 after merging `main`, against backend `main` `91349f0` (PR #18 merged; `E2E_BACKEND_DIR`, temporary SQLite file); 34 before PR #26 added `booking-retry.spec.ts` |
@@ -395,6 +405,7 @@ sign-out and new sign-in, and SecureStore contents before and after sign-out
 | Decision | Why | Cost | Record |
 | --- | --- | --- | --- |
 | Native sign-in as a public client with PKCE; refresh token in SecureStore, access token in memory | Standard for native apps (RFC 8252); no secret to leak | Device-only flow, needs a development build | [ADR 0001](adr/0001-native-sign-in-and-token-storage.md) |
+| E-mail sign-in as a second provider behind one interface; one session that records its provider | Same tested PKCE flow; a Microsoft session from before keeps working | Two sets of app registrations to keep in step | [ADR 0005](adr/0005-email-sign-in-through-external-id.md) |
 | Token transport rule in the app; API chosen at bundle time | Security does not depend on configuration discipline | Switching servers needs a Metro restart or a new build | [ADR 0002](adr/0002-api-target-and-token-transport.md) |
 | Logic in framework-free modules with injected dependencies | Fast, deterministic tests without a device | More wiring code | – |
 | React `key` per organisation | Impossible to show the previous organisation's state | Re-mounts the booking area on every switch | – |
@@ -447,10 +458,12 @@ sign-out and new sign-in, and SecureStore contents before and after sign-out
 - **No sign-in in this app's web build**, by decision: it uses the API's
   anonymous demo mode. The Angular client in the backend repository has its
   own Microsoft sign-in (backend ADR 0007).
-- **E-mail one-time-code sign-in (Entra External ID) is not implemented.** It
-  was in the architecture plan of 21 October 2026 but needs an External ID
-  tenant. Personal Microsoft accounts sign in through Microsoft; the app and
-  API store no passwords.
+- **E-mail one-time-code sign-in (Entra External ID) has not met Microsoft
+  yet.** It is implemented and unit-tested, but no external tenant exists,
+  so the real pages, tokens and claims are unverified
+  ([checklist](external-id-login.md#device-checklist)). Until the API's
+  e-mail check is turned on, an e-mail user cannot accept invitations. The
+  app and API store no passwords.
 - **iOS has never been built or tested.**
 - **Signed-in flows are not tested end to end**; they rely on unit tests with
   fakes and manual device checks.
