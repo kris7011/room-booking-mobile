@@ -378,7 +378,9 @@ sign-out and new sign-in, and SecureStore contents before and after sign-out
   modules, so the build was made again from `main` `ccc8204` the same day and
   installed as an update, keeping the app's data
   ([record](device-testing.md#rebuild-28-october-2026);
-  [procedure](device-testing.md#rebuilding-the-development-build)).
+  [procedure](device-testing.md#rebuilding-the-development-build)). The next
+  patch update (29 October: `expo` 58.0.21, `react-native` 0.88.1 and others,
+  PR #40) changes native code again; the build on the phone predates it.
 - **Release/production builds: [Not implemented].** There is no `eas.json`,
   no release package ID, no release redirect URI registration, and no store
   configuration. A release build would send tokens over HTTPS only, so it
